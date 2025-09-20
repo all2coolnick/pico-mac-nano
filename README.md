@@ -27,15 +27,21 @@ The finished Macintosh is just 62mm high but houses a 2.0" TFT LCD panel, rp2040
 
 For more details on the journey and design decisions, see the [pico-mac-nano project page](https://blog.1bitrainbow.com/pico-mac-nano/).
 
-The firmware directory contains an example, pre-built .uf2 rp2040 firmware file for the Pico Zero. This version is built with the standard 128K ram.
+## PCB files
 
-The PCB directory contains all gerber, drill hole, position and BOM files for the most recent revision of the PCB.
+The PCB directory contains all the gerber, drill hole, position and BOM files for the most recent revision of the PCB. These are as supplied to [JLC pcb]([https://blog.1bitrainbow.com/pico-mac-nano/](https://jlcpcb.com)). The format of BOM and position files may need to modified for other PCB manufacturers. JLC pcb can produce the bare board, the board with all SMC pre-fitted, or as we have, fully assembled with both SMC and through-hole components.
+
+## 3D files
+
+The 3D_model directory contains the .stl files for 3D printing the case, battery power module and box inserts (for a 75mm cube box). The case is comprised of the front housing, rear housing, switch blank (blocks the switch apperture intended for the [battery power module](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4470)) and reset/boot select button actuator. The battery module comprises upper and lower halves and the rocker switch. The box folder contains the top and bottom insert files and the two halves of the accessory box.
+
+## Other folders
+
+The firmware directory contains an example, pre-built .uf2 rp2040 firmware file for the Pico Zero. This version is built with the standard 128K ram.
 
 Data sheets for the TFT module and the controller are in the data_sheets directory.
 
-The 3D_model directory contains the .stl files for the four components of the Macintosh 128K case; front housing, rear housing, switch blank (blocks the switch apperture intended for the [battery power module](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4470)) and reset/boot select button actuator.
-
-All parts used in pico-mac-nano can be ordered on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). This includes the 3D printed case, the fully assembled custom PCB and the Pico Zero (pre-flashed with the latest pico-mac-nano firmware). You can even order a fully assembled pico-mac-nano or the collectors edition so you can be as hands-on or hands-off as you want.
+All teh indivudial parts used in pico-mac-nano, or a full self-assemble kit are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). This includes the 3D printed case, the fully assembled custom PCB and the Pico Zero (pre-flashed with the latest pico-mac-nano firmware). 
 
 ## Hardware Notes
 
@@ -52,7 +58,6 @@ The 40-pin, vertical FFC socket (J1) is used to connect the TFT LCD panel. Note 
 Labelled test pads are provided on the PCB for all data signals.
 
 Provision for battery power is provided on the PCB in the form of +5v and Ground header pins. This 5v input passes through an on-board Schottky diode (D1) to protect against pico-mac-nano being connected to a USB host and receiving 5V via USB while using battery power.
-The optional battery power module which uses a 3v lithium C2 battery, 5v boost regulator and micro switch, is available now on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4470).
 
 All components should be mounted on the underside of the PCB with the exception of the 2-pin 2.54mm male header (right-angle if using the [1-bit rainbow battery power module](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4470)) for 5v battery power, and the 2-pin 2.54mm female header for Audio (Beep). These should be mounted on the top to allow connection of a power source and/or speaker.
 
@@ -89,11 +94,21 @@ For reference, here are the pin assignments I have used for the Pico Zero.
 
 The Audio + and Audio - pins output a 600Hz square wave for 1 second at the start of the initialisation code to give an approximate rendition of the original Macintosh startup beep. Audio - is just the inverse of (180 deg out of sync with) Audio +. By connecting a speaker between this pair of outputs, we get a 6.6v differential signal which gave an acceptable volume without the need for any amplification. When the speaker was just connected between one output and ground, the volume was too low to be of use (In case you're worrying, both pins are set low after the beep so the Pico is not left with a high GPIO shorting to ground through the speaker).
 Audio + and Audio - are presented on their own header pins on the PCB to allow a speaker to be easily connected.
-Using a suitable inductor (the value will depend on the impedance of the speaker you are using) in series with the speaker, or a capacitor across the speaker, should filter out some of the higher frequencies so the beep is less buzzy.
+Using a suitable inductor (the value will depend on the impedance of the speaker you are using) in series with the speaker, or a capacitor across the speaker, should filter out some of the higher frequencies so the beep is less buzzy but I found that this significantly reduced the overall volume so our [speaker module](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4489) does not include such a low pass filter.
 
-As with the pico-mac project, pico-mac-nano is a personal hobby project and proof of concept rather than a commercial product. My aim was to see how small I could make it and this involved some compromises.
+## Battery Power Module
 
-Disclaimer: This project is provided with no warranty. All due care has been taken in design/docs, but if you choose to build it then I disclaim any responsibility for your hardware or personal safety.
+The optional battery power module uses a 3v, non-rechargeable, lithium CR2 battery. As well as the 3D printed chassis and roicker switch, it incorporates a tiny 2A 5v step up module, a micro switch, a 2-pin female 2.54mm header socket, battery contacts and four interconnecting wires. If you want to build it yourself, all the individual or a full kit is available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). There is an assembly video guide on our [YouTube channel](https://www.youtube.com/@1BitRainbow). Ready made units are also available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973_P4470).
+I suggest 3D printing the upper and lower battery module parts using PLA+ or PETG so it is stronger than if you printed in standard PLA.
+
+## Box
+
+We originally offered the pre-assembled pico0mac-nano in a collectors edition which came in a replica of the original 'picasso' box complete with an accessory case and flexible top & bottom inserts. At Apple's request, we have stopped offering these but if you would like to make your own box, the .stl files to 3D print the inserts and accessory box and in the 3D_model folder. These are designed for a 75mm cube corrugated cardboard box. We used white TPU 95A filament for the inserts and white PLA for the accessory box. TPU can be tricky to print with and I found that we had to dry in a filament dryer for 12h before use and we kept it in the dryer while printing, feeding via ptfe tube all the way to the extruder. I tried many different TPU brands but found both GEEETECH and Overture to be the most reliable on our Bambu Lab A1 printers. We used both eSun basic white PLA nfor the accessory box which is a nice warm, solid white.
+The inserts and accessory box are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973).
+
+## Disclaimer
+As with the pico-mac project, pico-mac-nano is a personal hobby project and proof of concept rather than a commercial product. My aim was to see how small I could make it and this involved some compromises. This project is provided with no warranty and has not been tested against any recognised safety standard. All due care has been taken in design/docs, but if you choose to build it then I disclaim any responsibility for your hardware or personal safety.
+
 
 Below is a modified version of [evansm7](https://github.com/evansm7) original readme from pico-mac v0.21 minus the Hardware Construction section since this variant uses a custom PCB so there is none of the original construction to be done.
 
