@@ -106,10 +106,9 @@ I suggest 3D printing the upper and lower battery module parts using PLA+ or PET
 We originally offered the pre-assembled pico0mac-nano in a collectors edition which came in a replica of the original 'picasso' box complete with an accessory case and flexible top & bottom inserts. At Apple's request, we have stopped offering these but if you would like to make your own box, the .stl files to 3D print the inserts and accessory box and in the 3D_model folder. These are designed for 1 75mm cube corrugated cardboard box. The inserts and accessory box are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973).
 I suggest 3D printing the upper and lower battery module parts using PLA+ or PETG so it is stronger than if you printed in standard PLA.
 
+## Disclaimer
+As with the pico-mac project, pico-mac-nano is a personal hobby project and proof of concept rather than a commercial product. My aim was to see how small I could make it and this involved some compromises. This project is provided with no warranty and has not been tested against any recognised safety standard. All due care has been taken in design/docs, but if you choose to build it then I disclaim any responsibility for your hardware or personal safety.
 
-As with the pico-mac project, pico-mac-nano is a personal hobby project and proof of concept rather than a commercial product. My aim was to see how small I could make it and this involved some compromises.
-
-Disclaimer: This project is provided with no warranty. All due care has been taken in design/docs, but if you choose to build it then I disclaim any responsibility for your hardware or personal safety.
 
 Below is a modified version of [evansm7](https://github.com/evansm7) original readme from pico-mac v0.21 minus the Hardware Construction section since this variant uses a custom PCB so there is none of the original construction to be done.
 
