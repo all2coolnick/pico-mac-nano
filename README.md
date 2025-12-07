@@ -49,6 +49,8 @@ The version 1 file is a 10MB .img version of the built in .dsk disk image used i
 
 Data sheets for the TFT module and the controller are in the data_sheets directory.
 
+The external, include and src folders contain the pico-mac-nano branch of the pico-mac source code, and are only needed if you plan to compile and build the firmware yourself.
+
 All the indivudial parts used in pico-mac-nano, or a full self-assemble kit are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). This includes the 3D printed case, the fully assembled custom PCB and the Pico Zero (pre-flashed with the latest pico-mac-nano firmware). 
 
 ## Hardware Notes
