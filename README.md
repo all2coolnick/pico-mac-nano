@@ -37,11 +37,11 @@ The 3D_model directory contains the .stl files for 3D printing the case, battery
 
 ## Other folders
 
-The firmware directory contains an example, pre-built .uf2 rp2040 firmware file for the Pico Zero. This version is built with the standard 128K ram.
+The firmware directory contains pre-built .uf2 rp2040 firmware files for the Pico Zero. This includes version 3.2 built with the standard 128K RAM (this is the version used on all pre-assembled & kit form pico-mac-nanos shipped to date). Version 19 no longer uses my hacked Mac Plus ROM. Instead it adopts the newer pico-mac code to patch the ROM to the desired screen resolution based on the build parameters. It is also built with the 208K RAM option which allows it to run MacPaint, but only when booted from a disk image on a micro-SD card. This is because the disk image contained in the pico-mac-nano firmware is read-only anbd MacPaint requires a writeable disk.
 
 Data sheets for the TFT module and the controller are in the data_sheets directory.
 
-All teh indivudial parts used in pico-mac-nano, or a full self-assemble kit are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). This includes the 3D printed case, the fully assembled custom PCB and the Pico Zero (pre-flashed with the latest pico-mac-nano firmware). 
+All the indivudial parts used in pico-mac-nano, or a full self-assemble kit are available on [1bitrainbow.com](https://www.1bitrainbow.com/parts-store.php?cPath=972_973). This includes the 3D printed case, the fully assembled custom PCB and the Pico Zero (pre-flashed with the latest pico-mac-nano firmware). 
 
 ## Hardware Notes
 
