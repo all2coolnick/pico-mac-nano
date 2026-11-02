@@ -39,6 +39,9 @@
 #include "hw.h"
 #include "video.h"
 #include "kbd.h"
+#if USB_PC
+#include "usb_pc.h"
+#endif
 
 #include "bsp/rp2040/board.h"
 #include "tusb.h"
@@ -127,6 +130,9 @@ static void     poll_umac()
         static absolute_time_t last_vsync = 0;
         absolute_time_t now = get_absolute_time();
 
+#if USB_PC
+        usb_pc_poll();
+#endif
         umac_loop();
 
         int64_t p_1hz = absolute_time_diff_us(last_1hz, now);
@@ -177,6 +183,7 @@ static int      disc_do_read(void *ctx, uint8_t *data, unsigned int offset, unsi
         f_lseek(fp, offset);
         unsigned int did_read = 0;
         FRESULT fr = f_read(fp, data, len, &did_read);
+        video_disk_activity();
         if (fr != FR_OK || len != did_read) {
                 printf("disc: f_read returned %d, read %u (of %u)\n", fr, did_read, len);
                 return -1;
@@ -190,6 +197,7 @@ static int      disc_do_write(void *ctx, uint8_t *data, unsigned int offset, uns
         f_lseek(fp, offset);
         unsigned int did_write = 0;
         FRESULT fr = f_write(fp, data, len, &did_write);
+        video_disk_activity();
         if (fr != FR_OK || len != did_write) {
                 printf("disc: f_write returned %d, read %u (of %u)\n", fr, did_write, len);
                 return -1;
@@ -199,6 +207,13 @@ static int      disc_do_write(void *ctx, uint8_t *data, unsigned int offset, uns
 
 static FIL discfp;
 #endif
+
+static int      disc_do_read_flash(void *ctx, uint8_t *data, unsigned int offset, unsigned int len)
+{
+        memcpy(data, &umac_disc[offset], len);
+        video_disk_activity();
+        return 0;
+}
 
 static void     disc_setup(disc_descr_t discs[DISC_NUM_DRIVES])
 {
@@ -263,7 +278,8 @@ no_sd:
         /* If we don't find (or look for) an SD-based image, attempt
          * to use in-flash disc image:
          */
-        discs[0].base = (void *)umac_disc;
+        discs[0].base = 0; // Means use R/W ops, which is how disk activity is seen
+        discs[0].op_read = disc_do_read_flash;
         discs[0].read_only = 1;
         discs[0].size = sizeof(umac_disc);
 }
@@ -306,6 +322,9 @@ int     main()
         tft_init();
 #endif
 
+#if USB_PC
+        usb_pc_init(umac_ram, umac_get_fb_offset());
+#endif
         multicore_launch_core1(core1_main);
 
 	printf("Starting, init usb\n");
@@ -313,8 +332,13 @@ int     main()
 
         /* This happens on core 0: */
 	while (true) {
+#if USB_PC
+                tud_task();
+                usb_pc_task();
+#else
                 tuh_task();
                 hid_app_task();
+#endif
                 poll_led_etc();
 	}
 

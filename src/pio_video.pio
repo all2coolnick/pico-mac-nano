@@ -145,6 +145,8 @@ now_read_HFP:           ; Y=HFP width:
 pixels_loop: ; OSR primed/autopulled
              ; FIXME: side-set DE=1
              out        pins, 1                 side 0  ; BPP
+             nop                                side 1  ; Clock each bit twice,
+             nop                                side 0  ; so pixels are 2 wide
              jmp        X-- pixels_loop         side 1
              ; FIXME: side-set DE=0
              ; Set video BLACK (1)
@@ -155,8 +157,9 @@ hfp_loop:    nop                                side 0
              jmp        Y-- hfp_loop            side 1
 
 ; A free HFP pixel, to prime for next line:
-             // Auto-pull gets next line (always a multiple of 32b)
-             nop                                side 0
+             // Lines needn't be a multiple of 32b: discard what's left of the
+             // last word.  (If the OSR was already refilled, this is a no-op.)
+             pull       block                   side 0
              jmp        frame_start             side 1
 
 ; HFP 2 min

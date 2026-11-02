@@ -44,9 +44,17 @@ set(TFT_SPI_CLK 2 CACHE STRING "TFT SPI SCK pin")
 set(TFT_SPI_CS 14 CACHE STRING "TFT SPI CS pin")
 set(TFT_RESET 15 CACHE STRING "TFT hard reset pin")
 
+option(USB_PC "Control from a PC over USB, instead of a USB keyboard and mouse" false)
+
 option(BEEP "Generate startup Beep" true) 
 set(GPIO_AUDIO 10 CACHE STRING "Audio signal out pin")
 set(GPIO_AUDIO_INV 11 CACHE STRING "Inverse of audio signal out pin")
+
+# Mac screen size.  Must match the ROM in incbin/umac-rom.h, which is patched
+# for one size (umac: "make DISP_WIDTH=... DISP_HEIGHT=...", then "main -W").
+set(DISP_WIDTH 240 CACHE STRING "Mac screen width, in pixels")
+set(DISP_HEIGHT 180 CACHE STRING "Mac screen height, in pixels")
+add_compile_definitions(DISP_WIDTH=${DISP_WIDTH} DISP_HEIGHT=${DISP_HEIGHT})
 
 # See below, -DMEMSIZE=<size in KB> will configure umac's memory size,
 # overriding defaults.
@@ -113,12 +121,21 @@ if (BEEP)
    add_compile_definitions(GPIO_AUDIO=${GPIO_AUDIO} GPIO_AUDIO_INV=${GPIO_AUDIO_INV})   
 endif()
 
+if (USB_PC)
+   add_compile_definitions(USB_PC=1)
+   set(EXTRA_USB_SRC src/usb_pc.c src/usb_descriptors.c)
+   set(EXTRA_USB_LIB tinyusb_device pico_bootrom)
+else()
+   set(EXTRA_USB_SRC src/hid.c)
+   set(EXTRA_USB_LIB tinyusb_host)
+endif()
+
 if (TARGET tinyusb_device)
   add_executable(firmware
     src/main.c
     src/video.c
     src/kbd.c
-    src/hid.c
+    ${EXTRA_USB_SRC}
     ${EXTRA_AUDIO_SRC}
     ${EXTRA_PICOZERO_SRC}
     ${EXTRA_TFT2P_SRC}
@@ -140,7 +157,7 @@ if (TARGET tinyusb_device)
   target_link_libraries(firmware
     pico_stdlib
     pico_multicore
-    tinyusb_host
+    ${EXTRA_USB_LIB}
     tinyusb_board
     hardware_dma
     hardware_pio

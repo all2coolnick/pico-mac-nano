@@ -349,3 +349,14 @@ The remainder of the code is released under the MIT licence:
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 
+
+
+## Controlling from a PC
+
+As well as using a USB keyboard and mouse, pico-mac-nano can be shown and controlled from a Mac. The Pico has one USB port, so this is chosen when building and replaces USB keyboard and mouse support:
+
+```
+cmake .. -DUSB_PC=ON
+```
+
+Plug the Pico into the Mac with a plain USB cable (no OTG adapter). `tools/PicoMacViewer` is a native app for this: run `build.sh` there (it needs the Xcode command line tools), then open `Pico Mac.app`. While its window is in front, all keys go to the emulated Mac, including Command-Q, so quit from the menu bar or by closing the window.

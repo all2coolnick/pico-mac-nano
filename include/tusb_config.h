@@ -39,7 +39,9 @@
   #error CFG_TUSB_MCU must be defined
 #endif
 
-#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
+#if USB_PC
+  #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_DEVICE
+#elif CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
   #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_HOST | OPT_MODE_HIGH_SPEED)
 #else
   #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_HOST
@@ -86,6 +88,16 @@
 //------------- HID -------------//
 #define CFG_TUH_HID_EPIN_BUFSIZE    64
 #define CFG_TUH_HID_EPOUT_BUFSIZE   64
+
+//--------------------------------------------------------------------
+// DEVICE CONFIGURATION (USB_PC mode)
+//--------------------------------------------------------------------
+
+#define CFG_TUD_ENDPOINT0_SIZE      64
+#define CFG_TUD_CDC                 1
+#define CFG_TUD_CDC_RX_BUFSIZE      256
+#define CFG_TUD_CDC_TX_BUFSIZE      2048
+#define CFG_TUD_CDC_EP_BUFSIZE      64
 
 #ifdef __cplusplus
  }

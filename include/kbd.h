@@ -31,6 +31,7 @@
 #include <stdbool.h>
 
 bool            kbd_queue_empty();
+bool            kbd_queue_full();
 /* If empty, return 0, else return a mac keycode in [7:0] and [15] set if a press (else release) */
 uint16_t        kbd_queue_pop();
 
