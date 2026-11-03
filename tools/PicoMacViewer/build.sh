@@ -7,7 +7,15 @@ APP="Pico Mac.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
-swiftc -O -swift-version 5 -framework Cocoa -framework IOKit main.swift -o "$APP/Contents/MacOS/PicoMac"
+# Universal binary, for Apple Silicon and Intel Macs on macOS 12 or newer.
+# Current toolchains have no Intel copy of a Swift compatibility library, so
+# Intel skips it.  The app doesn't use Swift concurrency, which it mainly serves.
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+FLAGS="-O -swift-version 5 -framework Cocoa -framework IOKit"
+swiftc $FLAGS -target arm64-apple-macos12.0 main.swift -o "$TMP/PicoMac-arm64"
+swiftc $FLAGS -target x86_64-apple-macos12.0 -runtime-compatibility-version none main.swift -o "$TMP/PicoMac-x86_64"
+lipo -create "$TMP/PicoMac-arm64" "$TMP/PicoMac-x86_64" -output "$APP/Contents/MacOS/PicoMac"
 
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
