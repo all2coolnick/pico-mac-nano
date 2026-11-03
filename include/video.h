@@ -29,5 +29,6 @@
 #include <inttypes.h>
 
 void    video_init(uint32_t *framebuffer);
+void    video_disk_activity(void);
 
 #endif

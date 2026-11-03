@@ -39,7 +39,7 @@ static uint16_t kbd_queue[KQ_SIZE];
 static unsigned int kbd_queue_prod = 0;
 static unsigned int kbd_queue_cons = 0;
 
-static bool     kbd_queue_full()
+bool            kbd_queue_full()
 {
         return ((kbd_queue_prod + 1) & KQ_MASK) == kbd_queue_cons;
 }

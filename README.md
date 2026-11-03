@@ -3,6 +3,14 @@
 <img alt="pico-mac-nano" src="https://github.com/user-attachments/assets/d9a80395-f821-47a4-9e62-aa7472d8036d" height="160px" />
 <img alt="pico-mac-nano" src="https://github.com/user-attachments/assets/5b1be959-36a9-44cd-a6f1-652e655c3235" height="160px" /><img alt="big brother" src="https://github.com/user-attachments/assets/53f04e85-f4c4-42e8-bdb0-ae4d853ce238" height="160px" /><img alt="inside" src="https://github.com/user-attachments/assets/92f52392-7c24-46c8-81e2-6b47628ced43" height="160px" />
 
+## Changes in this fork
+
+<img alt="pico-mac-nano showing the 240x180 Finder desktop" src="images/pico-mac-nano-240x180.jpg" width="480px" />
+
+   * **240x180 resolution:** the Mac screen is 240x180, shown at 2x2 on the panel, instead of the original 512x342. The size is set by `DISP_WIDTH` and `DISP_HEIGHT` in `CMakeLists.txt`, and the ROM must be patched for the same size (`make DISP_WIDTH=240 DISP_HEIGHT=180` when building umac; see [ROM image](#rom-image)).
+   * **Disk activity light:** a white bar lights up on the panel behind the case's floppy slot for 6 frames after each disk read or write. Its position is set by the `VIDEO_DISK_*` values in `src/video.c`.
+   * **Mac companion app:** `tools/PicoMacViewer` is a native macOS app that shows the screen and controls the emulated Mac over USB. It needs firmware built with `-DUSB_PC=ON`, which replaces USB keyboard and mouse support. See [Controlling from a PC](#controlling-from-a-pc).
+
 v0.3 20 May 2025
 
 Fork of https://github.com/evansm7/pico-mac v0.21
@@ -349,3 +357,14 @@ The remainder of the code is released under the MIT licence:
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 
+
+
+## Controlling from a PC
+
+As well as using a USB keyboard and mouse, pico-mac-nano can be shown and controlled from a Mac. The Pico has one USB port, so this is chosen when building and replaces USB keyboard and mouse support:
+
+```
+cmake .. -DUSB_PC=ON
+```
+
+Plug the Pico into the Mac with a plain USB cable (no OTG adapter). `tools/PicoMacViewer` is a native app for this: run `build.sh` there (it needs the Xcode command line tools), then open `Pico Mac.app`. While its window is in front, all keys go to the emulated Mac, including Command-Q, so quit from the menu bar or by closing the window.

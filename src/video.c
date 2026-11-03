@@ -55,9 +55,9 @@
  */
 #define VIDEO_PCLK_MULT         (2.5*2) /* Was (2.5*2) */
 #define VIDEO_HSW               2  /* Was 96 */
-#define VIDEO_HBP               63  /* Horizontal Back Porch */
+#define VIDEO_HBP               47  /* Horizontal Back Porch. changed from 63, no longer offset by 512-480 padding */
 #define VIDEO_HRES              480 /* Hor Resolution. changed from 640 */
-#define VIDEO_HFP               32  /* Horizontal Front Porch */
+#define VIDEO_HFP               48  /* Horizontal Front Porch. changed from 32, keeps the line length of 512 wide */
 #define VIDEO_H_TOTAL_NOSYNC    (VIDEO_HBP + VIDEO_HRES + VIDEO_HFP)
 #define VIDEO_VSW               2
 #define VIDEO_VBP               17  /* Vertical Back Porch. changed from 33 */
@@ -68,17 +68,28 @@
 #define VIDEO_V_VIS_START       (VIDEO_VSW + VIDEO_VBP)
 #define VIDEO_V_VIS_END         (VIDEO_V_VIS_START + VIDEO_VRES)
 
-#define VIDEO_FB_HRES           512 /* changed from 512 */
-#define VIDEO_FB_VRES           342
+#define VIDEO_FB_HRES           DISP_WIDTH
+#define VIDEO_FB_VRES           DISP_HEIGHT
+#define VIDEO_FB_SCALE          2   /* Each FB pixel is shown as 2x2.  The pixel loop in pio_video.pio clocks each bit twice */
+#define VIDEO_FB_BPL            (VIDEO_FB_HRES / 8) /* FB bytes per line */
 
 /* The lines at which the FB data is actively output: */
-#define VIDEO_FB_V_VIS_START    118      /* Was (VIDEO_V_VIS_START + ((VIDEO_VRES - VIDEO_FB_VRES)/2)) */
-#define VIDEO_FB_V_VIS_END      (VIDEO_FB_V_VIS_START + VIDEO_FB_VRES)
+#define VIDEO_FB_V_VIS_START    105      /* Was (VIDEO_V_VIS_START + ((VIDEO_VRES - VIDEO_FB_VRES)/2)) */
+#define VIDEO_FB_V_VIS_END      (VIDEO_FB_V_VIS_START + (VIDEO_FB_VRES * VIDEO_FB_SCALE))
+
+/* Disk activity light: a white bar behind the case's floppy slot, below the
+ * image.  X and width are in FB pixels, Y and height are in display lines.
+ */
+#define VIDEO_DISK_X            128
+#define VIDEO_DISK_W            112
+#define VIDEO_DISK_Y            (VIDEO_FB_V_VIS_END + 40)
+#define VIDEO_DISK_H            (VIDEO_V_TOTAL - VIDEO_DISK_Y)
+#define VIDEO_DISK_FRAMES       6   /* Frames to stay lit after each disk access */
 
 /* Words of 1BPP pixel data per line; this dictates the length of the
  * video data DMA transfer:
  */
-#define VIDEO_VISIBLE_WPL       (VIDEO_FB_HRES / 32) /* Words per line?? */
+#define VIDEO_VISIBLE_WPL       ((VIDEO_FB_HRES + 31) / 32) /* Rounded up: the PIO discards unused bits at the end of a line */
 
 #if (VIDEO_HRES & 31)
 #error "VIDEO_HRES: must be a multiple of 32b!"
@@ -88,6 +99,14 @@
 // Video DMA, framebuffer pointers
 
 static uint32_t video_null[VIDEO_VISIBLE_WPL];
+/* FB lines don't start on a word boundary, so DMA can't read them directly.
+ * Each FB line is copied here; alternate between two buffers because DMA is
+ * still reading one line when the next is prepared.
+ */
+static uint32_t video_line[2][VIDEO_VISIBLE_WPL];
+static uint32_t video_disk_line[VIDEO_VISIBLE_WPL];
+static volatile unsigned int video_disk_frames = 0;
+static bool video_disk_lit = false;     /* Only changes between frames, so the bar is never partly drawn */
 static uint32_t *video_framebuffer;
 
 /* DMA buffer containing 2 pairs of per-line config words, for VS and not-VS: */
@@ -123,10 +142,25 @@ static int      __not_in_flash_func(video_get_visible_y)(unsigned int y) {
 static const uint32_t   *__not_in_flash_func(video_line_addr)(unsigned int y)
 {
         int vy = video_get_visible_y(y);
-        if (vy >= 0)
-                return (const uint32_t *)&video_framebuffer[vy * VIDEO_VISIBLE_WPL];
-        else
+        if (vy < 0) {
+                if (video_disk_lit && (y >= VIDEO_DISK_Y) && (y < (VIDEO_DISK_Y + VIDEO_DISK_H)))
+                        return (const uint32_t *)video_disk_line;
                 return (const uint32_t *)video_null;
+        }
+
+        unsigned int fb_y = vy / VIDEO_FB_SCALE;
+        uint32_t *line = video_line[fb_y & 1];
+        /* Only the first of the repeated display lines needs a copy: */
+        if ((vy % VIDEO_FB_SCALE) == 0) {
+                const uint8_t *src = (const uint8_t *)video_framebuffer + (fb_y * VIDEO_FB_BPL);
+                uint8_t *dst = (uint8_t *)line;
+                for (unsigned int i = 0; i < VIDEO_FB_BPL; i++) {
+                        dst[i] = src[i];
+                        /* Stops GCC making this a memcpy() call, which is in flash */
+                        __compiler_memory_barrier();
+                }
+        }
+        return (const uint32_t *)line;
 }
 
 static const uint32_t   *__not_in_flash_func(video_cfg_addr)(unsigned int y)
@@ -163,8 +197,12 @@ static void    __not_in_flash_func(video_dma_prep_new)()
         video_dmadescr_data.raddr = video_line_addr(video_current_y);
 
         /* Frame done */
-        if (++video_current_y >= VIDEO_V_TOTAL)
+        if (++video_current_y >= VIDEO_V_TOTAL) {
                 video_current_y = 0;
+                video_disk_lit = (video_disk_frames > 0);
+                if (video_disk_lit)
+                        video_disk_frames--;
+        }
 }
 
 static void     __not_in_flash_func(video_dma_irq)()
@@ -181,11 +219,22 @@ static void     __not_in_flash_func(video_dma_irq)()
         }
 }
 
+/* Light the disk activity bar.  Called for each disk read/write. */
+void    video_disk_activity(void)
+{
+        video_disk_frames = VIDEO_DISK_FRAMES;
+}
+
 static void     video_prep_buffer()
 {
         memset(video_null, 0xff, VIDEO_VISIBLE_WPL * 4);
 
-        unsigned int porch_padding = (VIDEO_HRES - VIDEO_FB_HRES)/2;
+        /* Same as a blank line, with white (0) pixels for the bar: */
+        memset(video_disk_line, 0xff, VIDEO_VISIBLE_WPL * 4);
+        for (unsigned int x = VIDEO_DISK_X; x < (VIDEO_DISK_X + VIDEO_DISK_W); x++)
+                ((uint8_t *)video_disk_line)[x / 8] &= ~(0x80 >> (x % 8));
+
+        unsigned int porch_padding = (VIDEO_HRES - (VIDEO_FB_HRES * VIDEO_FB_SCALE))/2;
         // FIXME: HBP/HFP are prob off by one or so, check
         uint32_t timing = ((VIDEO_HSW - 1) << 23) |
                 ((VIDEO_HBP + porch_padding - 3) << 15) |
@@ -307,8 +356,8 @@ static void     video_init_dma()
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/* Initialise PIO, DMA, start sending pixels.  Passed a pointer to a 512x342x1
- * Mac-order framebuffer.
+/* Initialise PIO, DMA, start sending pixels.  Passed a pointer to a
+ * DISP_WIDTH x DISP_HEIGHT x 1 Mac-order framebuffer.
  *
  * FIXME: Add an API to change the FB base after init live, e.g. for bank
  * switching.
