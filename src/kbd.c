@@ -1,7 +1,8 @@
 /* HID to Mac keyboard scancode mapping
  *
- * FIXME: This doesn't do capslock (needs to track toggle), and arrow
- * keys don't work.
+ * Caps lock is handled as a latching key (see kbd_queue_push()).
+ *
+ * FIXME: Arrow keys don't work.
  *
  * Copyright 2024 Matt Evans
  *
@@ -184,10 +185,25 @@ static bool     kbd_map(uint8_t hid_keycode, bool pressed, uint16_t *key_out)
         return true;
 }
 
+/* A real Mac keyboard's Caps Lock is a latching key: the Mac sees it as
+ * "down" for as long as caps lock is on, and "up" once it's switched off.
+ * A USB keyboard just sends a momentary press and release each time, so
+ * track the on/off state here: each press flips it, and releases are
+ * ignored.
+ */
+static bool     caps_lock_on = false;
+
 bool            kbd_queue_push(uint8_t hid_keycode, bool pressed)
 {
         if (kbd_queue_full())
                 return false;
+
+        if (hid_keycode == HID_KEY_CAPS_LOCK) {
+                if (!pressed)
+                        return false;
+                caps_lock_on = !caps_lock_on;
+                pressed = caps_lock_on;
+        }
 
         uint16_t v;
         if (!kbd_map(hid_keycode, pressed, &v))

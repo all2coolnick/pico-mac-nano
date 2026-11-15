@@ -44,9 +44,10 @@ set(TFT_SPI_CLK 2 CACHE STRING "TFT SPI SCK pin")
 set(TFT_SPI_CS 14 CACHE STRING "TFT SPI CS pin")
 set(TFT_RESET 15 CACHE STRING "TFT hard reset pin")
 
-option(BEEP "Generate startup Beep" true) 
-set(GPIO_AUDIO 10 CACHE STRING "Audio signal out pin")
-set(GPIO_AUDIO_INV 11 CACHE STRING "Inverse of audio signal out pin")
+option(BEEP "Generate startup Beep (the Mac now plays its own chime via SOUND)" false) 
+option(SOUND "Play Mac sound via PWM on the audio pins" true)
+set(GPIO_AUDIO 13 CACHE STRING "Audio signal out pin")
+set(GPIO_AUDIO_INV 12 CACHE STRING "Inverse of audio signal out pin")
 
 # See below, -DMEMSIZE=<size in KB> will configure umac's memory size,
 # overriding defaults.
@@ -110,7 +111,15 @@ endif()
 if (BEEP)
    add_compile_definitions(BEEP=1)
    set(EXTRA_AUDIO_SRC src/audio.c)
-   add_compile_definitions(GPIO_AUDIO=${GPIO_AUDIO} GPIO_AUDIO_INV=${GPIO_AUDIO_INV})   
+endif()
+
+if (SOUND)
+   add_compile_definitions(SOUND=1)
+   list(APPEND EXTRA_AUDIO_SRC src/snd.c)
+endif()
+
+if (BEEP OR SOUND)
+   add_compile_definitions(GPIO_AUDIO=${GPIO_AUDIO} GPIO_AUDIO_INV=${GPIO_AUDIO_INV})
 endif()
 
 if (TARGET tinyusb_device)
@@ -143,6 +152,7 @@ if (TARGET tinyusb_device)
     tinyusb_host
     tinyusb_board
     hardware_dma
+    hardware_pwm
     hardware_pio
     hardware_sync
     ${EXTRA_SD_LIB}

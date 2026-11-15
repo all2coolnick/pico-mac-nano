@@ -68,7 +68,7 @@
 #define VIDEO_V_VIS_START       (VIDEO_VSW + VIDEO_VBP)
 #define VIDEO_V_VIS_END         (VIDEO_V_VIS_START + VIDEO_VRES)
 
-#define VIDEO_FB_HRES           512 /* changed from 512 */
+#define VIDEO_FB_HRES           480 /* matches a ROM patched for a 480-wide screen */
 #define VIDEO_FB_VRES           342
 
 /* The lines at which the FB data is actively output: */
