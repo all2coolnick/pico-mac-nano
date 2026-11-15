@@ -39,6 +39,9 @@
 #include "hw.h"
 #include "video.h"
 #include "kbd.h"
+#if SOUND
+#include "snd.h"
+#endif
 
 #include "bsp/rp2040/board.h"
 #include "tusb.h"
@@ -133,8 +136,17 @@ static void     poll_umac()
         int64_t p_vsync = absolute_time_diff_us(last_vsync, now);
         if (p_vsync >= 16667) {
                 /* FIXME: Trigger this off actual vsync */
+#if SOUND
+                snd_frame();
+#endif
                 umac_vsync_event();
-                last_vsync = now;
+                /* Advance by exactly one frame (rather than setting to
+                 * 'now', which loses the loop's latency every frame and
+                 * makes the Mac run slow); only re-sync if we're far behind.
+                 */
+                last_vsync = delayed_by_us(last_vsync, 16667);
+                if (absolute_time_diff_us(last_vsync, now) > 100000)
+                        last_vsync = now;
         }
         if (p_1hz >= 1000000) {
                 umac_1hz_event();
@@ -281,6 +293,10 @@ static void     core1_main()
          * core 0's USB activity.
          */
         video_init((uint32_t *)(umac_ram + umac_get_fb_offset()));
+
+#if SOUND
+        snd_init();
+#endif
 
         printf("Enjoyable Mac times now begin:\n\n");
 
