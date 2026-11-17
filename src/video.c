@@ -71,6 +71,13 @@
 #define VIDEO_FB_HRES           480 /* matches a ROM patched for a 480-wide screen */
 #define VIDEO_FB_VRES           342
 
+/* Horizontal position of the Mac image on the panel, in pixels (negative =
+ * further left).  Builds before v9 used a 512-wide FB, which (via an unsigned
+ * wrap in the padding sum) started each line 16 pixels earlier than HBP; this
+ * panel's visible area matches that, so keep the same position.
+ */
+#define VIDEO_FB_HSHIFT         (-16)
+
 /* The lines at which the FB data is actively output: */
 #define VIDEO_FB_V_VIS_START    118      /* Was (VIDEO_V_VIS_START + ((VIDEO_VRES - VIDEO_FB_VRES)/2)) */
 #define VIDEO_FB_V_VIS_END      (VIDEO_FB_V_VIS_START + VIDEO_FB_VRES)
@@ -185,11 +192,13 @@ static void     video_prep_buffer()
 {
         memset(video_null, 0xff, VIDEO_VISIBLE_WPL * 4);
 
-        unsigned int porch_padding = (VIDEO_HRES - VIDEO_FB_HRES)/2;
+        /* Signed maths: the total line length stays the same, the image just moves. */
+        int left_pad  = (VIDEO_HRES - VIDEO_FB_HRES)/2 + VIDEO_FB_HSHIFT;
+        int right_pad = (VIDEO_HRES - VIDEO_FB_HRES) - left_pad;
         // FIXME: HBP/HFP are prob off by one or so, check
         uint32_t timing = ((VIDEO_HSW - 1) << 23) |
-                ((VIDEO_HBP + porch_padding - 3) << 15) |
-                ((VIDEO_HFP + porch_padding - 4) << 7);
+                ((uint32_t)(VIDEO_HBP + left_pad - 3) << 15) |
+                ((uint32_t)(VIDEO_HFP + right_pad - 4) << 7);
         video_dma_cfg[0] = timing | 0x80000000;
         video_dma_cfg[1] = VIDEO_FB_HRES - 1;
         video_dma_cfg[2] = timing;

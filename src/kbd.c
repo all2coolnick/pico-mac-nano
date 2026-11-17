@@ -2,7 +2,8 @@
  *
  * Caps lock is handled as a latching key (see kbd_queue_push()).
  *
- * FIXME: Arrow keys don't work.
+ * Keypad and arrow keys are sent the way a Mac Plus keypad (M0110A) does:
+ * a 0x79 prefix byte, and for + * / = also a 0x71 prefix (see kbd_map_pad()).
  *
  * Copyright 2024 Matt Evans
  *
@@ -137,28 +138,7 @@ static const uint8_t hid_to_mac[256] = {
         [HID_KEY_DELETE] = MKC_BackSpace,
         [HID_KEY_END] = MKC_End,
         [HID_KEY_PAGE_DOWN] = MKC_PageDown,
-        [HID_KEY_ARROW_RIGHT] = MKC_Right,
-        [HID_KEY_ARROW_LEFT] = MKC_Left,
-        [HID_KEY_ARROW_DOWN] = MKC_Down,
-        [HID_KEY_ARROW_UP] = MKC_Up,
         /* [HID_KEY_NUM_LOCK] = MKC_, */
-        [HID_KEY_KEYPAD_DIVIDE] = MKC_KPDevide,
-        [HID_KEY_KEYPAD_MULTIPLY] = MKC_KPMultiply,
-        [HID_KEY_KEYPAD_SUBTRACT] = MKC_KPSubtract,
-        [HID_KEY_KEYPAD_ADD] = MKC_KPAdd,
-        [HID_KEY_KEYPAD_ENTER] = MKC_Enter,
-        [HID_KEY_KEYPAD_1] = MKC_KP1,
-        [HID_KEY_KEYPAD_2] = MKC_KP2,
-        [HID_KEY_KEYPAD_3] = MKC_KP3,
-        [HID_KEY_KEYPAD_4] = MKC_KP4,
-        [HID_KEY_KEYPAD_5] = MKC_KP5,
-        [HID_KEY_KEYPAD_6] = MKC_KP6,
-        [HID_KEY_KEYPAD_7] = MKC_KP7,
-        [HID_KEY_KEYPAD_8] = MKC_KP8,
-        [HID_KEY_KEYPAD_9] = MKC_KP9,
-        [HID_KEY_KEYPAD_0] = MKC_KP0,
-        [HID_KEY_KEYPAD_DECIMAL] = MKC_Decimal,
-        [HID_KEY_KEYPAD_EQUAL] = MKC_Equal,
         [HID_KEY_RETURN] = MKC_Return,
         /* [HID_KEY_POWER] = MKC_, */
         /* [HID_KEY_KEYPAD_COMMA] = MKC_, */
@@ -172,6 +152,49 @@ static const uint8_t hid_to_mac[256] = {
         [HID_KEY_ALT_RIGHT] = MKC_Option,
         [HID_KEY_GUI_RIGHT] = MKC_Command,
 };
+
+/* Keypad & arrow keys, M0110A style.  Press: 0x79, code; release: 0x79,
+ * code|0x80.  The four "calc" keys also get a leading 0x71 (0xF1 on release).
+ * Queue entry bits [14:13] say which: 1 = 0x79 prefix, 2 = 0x71 0x79 prefixes.
+ */
+#define PAD_P79         (1 << 13)
+#define PAD_P71_79      (2 << 13)
+
+static const struct { uint8_t hid; uint8_t code; uint16_t kind; } pad_keys[] = {
+        { HID_KEY_ARROW_LEFT,      0x0D, PAD_P79 },
+        { HID_KEY_ARROW_RIGHT,     0x05, PAD_P79 },
+        { HID_KEY_ARROW_UP,        0x1B, PAD_P79 },
+        { HID_KEY_ARROW_DOWN,      0x11, PAD_P79 },
+        { HID_KEY_NUM_LOCK,        0x0F, PAD_P79 },     /* Clear */
+        { HID_KEY_KEYPAD_EQUAL,    0x11, PAD_P71_79 },
+        { HID_KEY_KEYPAD_DIVIDE,   0x1B, PAD_P71_79 },
+        { HID_KEY_KEYPAD_MULTIPLY, 0x05, PAD_P71_79 },
+        { HID_KEY_KEYPAD_ADD,      0x0D, PAD_P71_79 },
+        { HID_KEY_KEYPAD_SUBTRACT, 0x1D, PAD_P79 },
+        { HID_KEY_KEYPAD_ENTER,    0x19, PAD_P79 },
+        { HID_KEY_KEYPAD_DECIMAL,  0x03, PAD_P79 },
+        { HID_KEY_KEYPAD_0,        0x25, PAD_P79 },
+        { HID_KEY_KEYPAD_1,        0x27, PAD_P79 },
+        { HID_KEY_KEYPAD_2,        0x29, PAD_P79 },
+        { HID_KEY_KEYPAD_3,        0x2B, PAD_P79 },
+        { HID_KEY_KEYPAD_4,        0x2D, PAD_P79 },
+        { HID_KEY_KEYPAD_5,        0x2F, PAD_P79 },
+        { HID_KEY_KEYPAD_6,        0x31, PAD_P79 },
+        { HID_KEY_KEYPAD_7,        0x33, PAD_P79 },
+        { HID_KEY_KEYPAD_8,        0x37, PAD_P79 },
+        { HID_KEY_KEYPAD_9,        0x39, PAD_P79 },
+};
+
+static bool     kbd_map_pad(uint8_t hid_keycode, bool pressed, uint16_t *key_out)
+{
+        for (unsigned int i = 0; i < sizeof(pad_keys) / sizeof(pad_keys[0]); i++) {
+                if (pad_keys[i].hid == hid_keycode) {
+                        *key_out = pad_keys[i].code | pad_keys[i].kind | (pressed ? 0x8000 : 0);
+                        return true;
+                }
+        }
+        return false;
+}
 
 static bool     kbd_map(uint8_t hid_keycode, bool pressed, uint16_t *key_out)
 {
@@ -206,7 +229,7 @@ bool            kbd_queue_push(uint8_t hid_keycode, bool pressed)
         }
 
         uint16_t v;
-        if (!kbd_map(hid_keycode, pressed, &v))
+        if (!kbd_map_pad(hid_keycode, pressed, &v) && !kbd_map(hid_keycode, pressed, &v))
                 return false;
 
         kbd_queue[kbd_queue_prod] = v;

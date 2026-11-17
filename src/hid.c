@@ -37,6 +37,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <stdarg.h>
+#include <stdio.h>
+#include "pico/time.h"
 #include "tusb.h"
 
 #include "kbd.h"
@@ -59,6 +62,44 @@
 int cursor_x = 0;
 int cursor_y = 0;
 int cursor_button = 0;
+
+/* Small in-RAM event log (time in ms since boot), saved to the SD card by
+ * main.c: handy since the only USB port is busy with the keyboard.
+ */
+static char hid_logbuf[3072];
+static volatile unsigned int hid_loglen = 0;
+
+void hid_log(const char *fmt, ...)
+{
+        char line[112];
+        va_list ap;
+        va_start(ap, fmt);
+        int n = snprintf(line, sizeof(line) - 1, "%6u ms: ", (unsigned int)(time_us_32() / 1000));
+        if (n < 0)
+                n = 0;
+        int m = vsnprintf(line + n, sizeof(line) - 1 - n, fmt, ap);
+        va_end(ap);
+        if (m < 0)
+                m = 0;
+        n += m;
+        if (n > (int)sizeof(line) - 2)
+                n = sizeof(line) - 2;
+        line[n++] = '\n';
+        if (hid_loglen + n > sizeof(hid_logbuf))
+                return;         /* Full: keep the beginning */
+        memcpy(hid_logbuf + hid_loglen, line, n);
+        hid_loglen += n;
+}
+
+const char *hid_log_get(unsigned int *len)
+{
+        *len = hid_loglen;
+        return hid_logbuf;
+}
+
+volatile bool hid_kbd_mounted = false;
+volatile bool hid_kbd_seen = false;
+volatile int8_t hid_boot_digit = -1;
 
 //--------------------------------------------------------------------+
 // Per-interface description of where things live in the input reports
@@ -448,9 +489,32 @@ static inline bool bit_test(const uint8_t *map, unsigned int code)
  * Modifiers go first when pressed and last when released, so e.g. Shift+A
  * arriving in a single report is delivered as Shift, A (not A, Shift).
  */
+/* HID key code -> 0-9 for the number row and keypad digits, else -1 */
+static int digit_of_key(unsigned int c)
+{
+        if (c >= 0x1e && c <= 0x26)     /* 1..9 */
+                return c - 0x1e + 1;
+        if (c == 0x27)                  /* 0 */
+                return 0;
+        if (c >= 0x59 && c <= 0x61)     /* Keypad 1..9 */
+                return c - 0x59 + 1;
+        if (c == 0x62)                  /* Keypad 0 */
+                return 0;
+        return -1;
+}
+
 static void kbd_apply(hid_itf_t *h, const uint8_t now[32])
 {
         const uint8_t *was = h->keys_down;
+
+        for (unsigned int c = 1; c < KEY_MOD_FIRST; c++) {
+                int d = digit_of_key(c);
+                if (d >= 0 && bit_test(now, c) && !bit_test(was, c)) {
+                        hid_boot_digit = d;
+                        hid_log("number key %d pressed", d);
+                }
+        }
+        hid_kbd_seen = true;
 
         for (unsigned int c = KEY_MOD_FIRST; c <= KEY_MOD_LAST; c++)
                 if (bit_test(now, c) && !bit_test(was, c))
@@ -569,6 +633,43 @@ static void process_report(hid_itf_t *h, const uint8_t *r, uint16_t len)
 // TinyUSB Callbacks
 //--------------------------------------------------------------------+
 
+/* A keyboard normally only sends a report when a key changes, so a key held
+ * down since power-on (used to pick a disc image) would never be seen.
+ * Ask for the current state with GET_REPORT as soon as it's mounted; the
+ * reply is processed like any other report.
+ */
+static uint8_t init_buf[CFG_TUH_HID][72];
+
+#define INIT_REQ_DELAY_MS       300     /* After the last interface mounted */
+static bool     init_pending[CFG_TUH_HID];
+static uint8_t  init_dev[CFG_TUH_HID];
+static uint8_t  init_tries[CFG_TUH_HID];
+static uint32_t init_due_ms[CFG_TUH_HID];
+static uint32_t last_mount_ms;
+
+static bool request_initial_keys(hid_itf_t *h, uint8_t dev_addr, uint8_t instance)
+{
+        for (uint8_t fi = 0; fi < h->n_fields; fi++) {
+                const hid_field_t *f = &h->fields[fi];
+                if (f->kind != F_KEYBITS && f->kind != F_KEYARRAY)
+                        continue;
+                /* Report length: furthest bit of any field in this report */
+                unsigned int end = 0;
+                for (uint8_t fj = 0; fj < h->n_fields; fj++) {
+                        const hid_field_t *g = &h->fields[fj];
+                        unsigned int e = g->bit_off + (unsigned int)g->size * g->count;
+                        if (g->report_id == f->report_id && e > end)
+                                end = e;
+                }
+                unsigned int len = (end + 7) / 8 + (h->has_ids ? 1 : 0);
+                if (len > sizeof(init_buf[0]))
+                        len = sizeof(init_buf[0]);
+                return tuh_hid_get_report(dev_addr, instance, f->report_id, HID_REPORT_TYPE_INPUT,
+                                          init_buf[instance], len);
+        }
+        return true;    /* Nothing to ask */
+}
+
 void hid_app_task(void)
 {
         static bool done = false;
@@ -584,6 +685,26 @@ void hid_app_task(void)
                 tuh_hid_set_default_protocol(HID_PROTOCOL_REPORT);
                 done = true;
         }
+
+        /* Deferred initial key-state requests (see tuh_hid_mount_cb) */
+        uint32_t now = time_us_32() / 1000;
+        for (uint8_t i = 0; i < CFG_TUH_HID; i++) {
+                if (!init_pending[i])
+                        continue;
+                if (!hid_itf[i].active) {
+                        init_pending[i] = false;
+                        continue;
+                }
+                if ((int32_t)(now - init_due_ms[i]) < 0 || (int32_t)(now - last_mount_ms) < INIT_REQ_DELAY_MS)
+                        continue;
+                bool ok = request_initial_keys(&hid_itf[i], init_dev[i], i);
+                hid_log("GET_REPORT request itf %d: %s (try %d)", i, ok ? "sent" : "busy", init_tries[i] + 1);
+                if (ok || ++init_tries[i] >= 5) {
+                        init_pending[i] = false;
+                } else {
+                        init_due_ms[i] = now + 100;     /* Control pipe busy: retry */
+                }
+        }
 }
 
 // Invoked when device with hid interface is mounted
@@ -591,6 +712,8 @@ void hid_app_task(void)
 // and desc_report = NULL, desc_len = 0
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
+        last_mount_ms = time_us_32() / 1000;    /* Enumeration is still going on */
+
         if (instance >= CFG_TUH_HID)
                 return;
 
@@ -598,6 +721,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
         printf("HID device address = %d, instance = %d is mounted (protocol %d, descriptor %d bytes)\r\n",
                dev_addr, instance, itf_protocol, desc_len);
+        {
+                uint16_t vid = 0, pid = 0;
+                tuh_vid_pid_get(dev_addr, &vid, &pid);
+                hid_log("mount dev %d itf %d proto %d desc %d bytes, VID:PID %04x:%04x",
+                        dev_addr, instance, itf_protocol, desc_len, vid, pid);
+        }
 
         hid_itf_t *h = &hid_itf[instance];
         memset(h, 0, sizeof(*h));
@@ -614,21 +743,45 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
 
         if (!itf_usable(h)) {
                 printf("  Not a keyboard or mouse we can use; ignoring\r\n");
+                hid_log("  itf %d: not usable, ignored", instance);
                 memset(h, 0, sizeof(*h));
                 return;
         }
 
         printf("  Using %d report fields%s\r\n", h->n_fields, h->has_ids ? " (with report IDs)" : "");
         h->active = true;
+        {
+                int nk = 0;
+                for (uint8_t fi = 0; fi < h->n_fields; fi++)
+                        if (h->fields[fi].kind == F_KEYBITS || h->fields[fi].kind == F_KEYARRAY)
+                                nk++;
+                hid_log("  itf %d usable: %d fields, %d key fields, report IDs %s", instance,
+                        h->n_fields, nk, h->has_ids ? "yes" : "no");
+        }
 
         if (!tuh_hid_receive_report(dev_addr, instance))
                 printf("Error: cannot request to receive report\r\n");
+
+        /* Not now: we're inside enumeration, and a control transfer here can
+         * collide with the setup of the device's other interfaces (e.g. the
+         * mouse half of a wireless receiver).  hid_app_task() asks later.
+         */
+#ifndef HID_INITIAL_REQUEST
+#define HID_INITIAL_REQUEST 1
+#endif
+#if HID_INITIAL_REQUEST
+        init_dev[instance] = dev_addr;
+        init_due_ms[instance] = last_mount_ms + INIT_REQ_DELAY_MS;
+        init_tries[instance] = 0;
+        init_pending[instance] = true;
+#endif
 }
 
 // Invoked when device with hid interface is un-mounted
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
         printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
+        hid_log("unmount dev %d itf %d", dev_addr, instance);
 
         if (instance >= CFG_TUH_HID)
                 return;
@@ -641,12 +794,41 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
         }
 }
 
+// Reply to request_initial_keys()
+void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t report_id,
+                                    uint8_t report_type, uint16_t len)
+{
+        (void)dev_addr; (void)report_type;
+        hid_log("GET_REPORT reply itf %d id %d len %d", instance, report_id, len);
+        if (instance >= CFG_TUH_HID || !hid_itf[instance].active || len == 0)
+                return;
+        hid_itf_t *h = &hid_itf[instance];
+        uint8_t *b = init_buf[instance];
+        if (h->has_ids && len < sizeof(init_buf[0]) - 1 && b[0] != report_id) {
+                /* Device left off the report ID byte: put it back */
+                memmove(b + 1, b, len);
+                b[0] = report_id;
+                len++;
+        }
+        process_report(h, b, len);
+}
+
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len)
 {
         if (instance >= CFG_TUH_HID || !hid_itf[instance].active)
                 return;
 
+        {
+                static uint8_t nrep[CFG_TUH_HID];
+                if (nrep[instance] < 4) {
+                        nrep[instance]++;
+                        hid_log("report itf %d len %d: %02x %02x %02x %02x %02x %02x %02x %02x", instance, len,
+                                len > 0 ? report[0] : 0, len > 1 ? report[1] : 0, len > 2 ? report[2] : 0,
+                                len > 3 ? report[3] : 0, len > 4 ? report[4] : 0, len > 5 ? report[5] : 0,
+                                len > 6 ? report[6] : 0, len > 7 ? report[7] : 0);
+                }
+        }
         process_report(&hid_itf[instance], report, len);
 
         // continue to request to receive report
