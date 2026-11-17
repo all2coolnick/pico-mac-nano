@@ -37,6 +37,8 @@ set(SD_RX 4 CACHE STRING "SD SPI RX pin")
 set(SD_SCK 2 CACHE STRING "SD SPI SCK pin")
 set(SD_CS 5 CACHE STRING "SD SPI CS pin")
 set(SD_MHZ 5 CACHE STRING "SD SPI speed in MHz")
+option(SD_BOOT_SELECT "Hold a 0-9 key at power-on to boot umac<N>.img from the SD card (adds a short wait for a USB keyboard)" ON)
+set(SD_SELECT_WAIT_MS 3000 CACHE STRING "With SD_BOOT_SELECT: max ms at power-on to wait for a USB keyboard")
 
 option(TFT_2P "Output to TFT" true) # Control pin settings for 2-inch Portrait TFT
 set(TFT_SPI_MOSI 3 CACHE STRING "TFT SPI TX pin")
@@ -95,6 +97,12 @@ if (USE_SD)
    set(EXTRA_SD_SRC src/sd_hw_config.c)
    set(EXTRA_SD_LIB FatFs_SPI)
    add_compile_definitions(SD_TX=${SD_TX} SD_RX=${SD_RX} SD_SCK=${SD_SCK} SD_CS=${SD_CS} SD_MHZ=${SD_MHZ})
+   if (SD_BOOT_SELECT)
+      add_compile_definitions(SD_SELECT_WAIT_MS=${SD_SELECT_WAIT_MS})
+   else()
+      # No boot-key selection: no keyboard wait, no connect-time key-state request
+      add_compile_definitions(SD_SELECT_WAIT_MS=0 HID_INITIAL_REQUEST=0)
+   endif()
 endif()
 
 if (TFT_2P)

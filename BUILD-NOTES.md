@@ -12,6 +12,27 @@
   `-DGPIO_AUDIO=13 -DGPIO_AUDIO_INV=12` (must be the A/B pair of one PWM slice).
 * umac ROM patching (`external/umac/src/rom.c`), for MEMSIZE > 128: skips the
   ROM RAM test (fast boot, no flicker) and points the ROM beep at the real sound buffer.
+* SD card images (`src/main.c`, `src/hid.c`):
+  * Boot image: `umac0*.img` by default. Hold a number key (0-9, top row or keypad)
+    while powering on to boot `umacN*.img` instead (falls back to umac0, then to
+    the in-flash disc). Enabled by default; build with `-DSD_BOOT_SELECT=OFF` to remove it
+    (no keyboard wait at boot). The firmware waits up to `SD_SELECT_WAIT_MS` (default
+    3000 ms, 0 disables) for a USB keyboard to appear.
+  * Extra volumes: `vol1*.img`, `vol2*.img`, `vol3*.img` are mounted as drives
+    2-4 and appear on the desktop shortly after boot (`SD_EXTRA_PREFIX` changes
+    the "vol" prefix). `...ro.img` (e.g. `vol1ro.img`) means read-only.
+  * umac (`external/umac`): `DISC_NUM_DRIVES` is now 4; the `.Sony` driver stub
+    (`macsrc/sonydrv.S`, rebuilt into `include/sonydrv.h` with
+    `make sonydrv.bin`, needs m68k binutils) registers every disc and mounts the
+    extra ones with `MountVol` + a disk-inserted event once the desktop is up.
+    The ROM must be re-patched (`./main -W`) with the new driver.
+* Keypad / arrow keys (`src/kbd.c`, umac `src/main.c`): sent like a Mac Plus keypad
+  (M0110A): `0x79` then the key code (`0x71` Shift first for + * / =). umac now
+  has a small keyboard byte FIFO and answers the Instant command (0x14), which the
+  Mac uses to fetch the byte after the 0x79 prefix.
+* Screen position (`src/video.c`): `VIDEO_FB_HSHIFT` (-16) moves the 480-wide image left so
+  it sits where the older 512-wide-FB builds put it (v9-v10 were shifted 16 px right, cutting
+  off the right edge). Total line length is unchanged; tune the value if the edge is off.
 * `src/video.c`: VIDEO_FB_HRES is 480 (matches a ROM patched by umac to 480x342).
 * `CMakeLists.txt`: SOUND option, hardware_pwm, audio pin defaults 13/12.
 
