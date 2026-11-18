@@ -43,6 +43,28 @@
 #include "snd.h"
 #endif
 
+#if USB_PC
+#include "usb_pc.h"
+#include "hardware/watchdog.h"
+#endif
+
+/* Is the Pico a PC-controlled serial device (else a USB host for keyboard and mouse)? */
+#if USB_AUTO
+static bool     pc_mode = false;
+#define PC_MODE         pc_mode
+/* With USB_AUTO: wait this long at power-on for a keyboard or mouse before deciding the
+ * Pico is plugged into a PC.  (Apple keyboards can take over 2 s to enumerate.)
+ */
+#ifndef USB_AUTO_WAIT_MS
+#define USB_AUTO_WAIT_MS        4000
+#endif
+#define PC_MODE_MAGIC           0x50434d44      /* Survives the restart in a watchdog scratch register */
+#elif USB_PC
+#define PC_MODE         1
+#else
+#define PC_MODE         0
+#endif
+
 #include "bsp/rp2040/board.h"
 #include "tusb.h"
 
@@ -134,6 +156,10 @@ static void     poll_umac()
         static absolute_time_t last_vsync = 0;
         absolute_time_t now = get_absolute_time();
 
+#if USB_PC
+        if (PC_MODE)
+                usb_pc_poll();
+#endif
         umac_loop();
 
         int64_t p_1hz = absolute_time_diff_us(last_1hz, now);
@@ -214,6 +240,7 @@ static int      disc_do_read(void *ctx, uint8_t *data, unsigned int offset, unsi
         f_lseek(fp, offset);
         unsigned int did_read = 0;
         FRESULT fr = f_read(fp, data, len, &did_read);
+        video_disk_activity();
         if (fr != FR_OK || len != did_read) {
                 printf("disc: f_read returned %d, read %u (of %u)\n", fr, did_read, len);
                 return -1;
@@ -227,6 +254,7 @@ static int      disc_do_write(void *ctx, uint8_t *data, unsigned int offset, uns
         f_lseek(fp, offset);
         unsigned int did_write = 0;
         FRESULT fr = f_write(fp, data, len, &did_write);
+        video_disk_activity();
         if (fr != FR_OK || len != did_write) {
                 printf("disc: f_write returned %d, read %u (of %u)\n", fr, did_write, len);
                 return -1;
@@ -240,7 +268,6 @@ static FIL discfp[DISC_NUM_DRIVES];
 #if USE_SD
 /* Which disc image to boot: umac<N>*.img, where N is a number key held
  * down while powering on (a USB keyboard takes a moment to enumerate, so
-        video_disk_activity();
  * wait for it, but not for long if there isn't one).  No key means 0.
  */
 #ifndef SD_SELECT_WAIT_MS
@@ -249,20 +276,20 @@ static FIL discfp[DISC_NUM_DRIVES];
 
 static int      boot_image_number(void)
 {
-        if (SD_SELECT_WAIT_MS <= 0)
+        if (SD_SELECT_WAIT_MS <= 0 || PC_MODE)
                 return 0;
 
         absolute_time_t t0 = get_absolute_time();
         absolute_time_t end = delayed_by_ms(t0, SD_SELECT_WAIT_MS);
-        video_disk_activity();
-        while (!hid_kbd_seen && !time_reached(end))
+        while (!hid_kbd_ready() && !time_reached(end))
                 sleep_ms(5);
         int seen_ms = (int)(absolute_time_diff_us(t0, get_absolute_time()) / 1000);
-        if (hid_kbd_seen)
+        bool have_kbd = hid_kbd_ready();
+        if (have_kbd)
                 sleep_ms(100);  /* Let a held key's report arrive */
 
         int n = hid_boot_digit;
-        if (hid_kbd_seen) {
+        if (have_kbd) {
                 printf("  Keyboard found after %d ms, boot key: %d\n", seen_ms, n);
                 hid_log("select: keyboard reported at %d ms, boot key %d", seen_ms, n);
         } else {
@@ -350,6 +377,14 @@ static void     open_extra_volumes(disc_descr_t discs[DISC_NUM_DRIVES])
 }
 #endif
 
+/* In-flash disc: read through a function (not directly) so disk activity shows */
+static int      disc_do_read_flash(void *ctx, uint8_t *data, unsigned int offset, unsigned int len)
+{
+        memcpy(data, &umac_disc[offset], len);
+        video_disk_activity();
+        return 0;
+}
+
 static void     use_flash_disc(disc_descr_t discs[DISC_NUM_DRIVES])
 {
         discs[0].base = 0; // Means use read op, which is how disk activity is seen
@@ -378,14 +413,6 @@ static void     disc_setup(disc_descr_t discs[DISC_NUM_DRIVES])
         if (!found && n != 0) {
                 printf("  Falling back to umac0\n");
                 found = open_image("umac", 0, 0, discs, false);
-/* In-flash disc: read through a function (not directly) so disk activity shows */
-static int      disc_do_read_flash(void *ctx, uint8_t *data, unsigned int offset, unsigned int len)
-{
-        memcpy(data, &umac_disc[offset], len);
-        video_disk_activity();
-        return 0;
-}
-
         }
         if (!found)
                 use_flash_disc(discs);
@@ -447,15 +474,62 @@ int     main()
         tft_init();
 #endif
 
+#if USB_AUTO
+        /* Restarted by the code below, having found no keyboard or mouse? */
+        pc_mode = watchdog_caused_reboot() && (watchdog_hw->scratch[0] == PC_MODE_MAGIC);
+        watchdog_hw->scratch[0] = 0;    /* Only for this boot: a reset starts by looking for a keyboard again */
+        if (!pc_mode) {
+                /* Host mode: see whether anything is plugged in before starting the Mac */
+                tusb_rhport_init_t host = { .role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_AUTO };
+                tusb_rhport_init(0, &host);
+                absolute_time_t end = delayed_by_ms(get_absolute_time(), USB_AUTO_WAIT_MS);
+                while (!hid_any_mounted && !time_reached(end)) {
+                        tuh_task();
+                        hid_app_task();
+                }
+                if (!hid_any_mounted) {
+                        printf("No USB keyboard or mouse: restarting as a PC-controlled device\n");
+                        watchdog_hw->scratch[0] = PC_MODE_MAGIC;
+                        watchdog_reboot(0, 0, 0);
+                        while (true)
+                                tight_loop_contents();
+                }
+        }
+#endif
+#if USB_PC
+        if (PC_MODE)
+                usb_pc_init(umac_ram, umac_get_fb_offset());
+#endif
         multicore_launch_core1(core1_main);
 
 	printf("Starting, init usb\n");
+#if USB_AUTO
+        if (pc_mode) {
+                tusb_rhport_init_t dev = { .role = TUSB_ROLE_DEVICE, .speed = TUSB_SPEED_AUTO };
+                tusb_rhport_init(0, &dev);
+        }
+        /* else host mode is already running */
+#else
         tusb_init();
+#endif
 
         /* This happens on core 0: */
 	while (true) {
+#if USB_AUTO
+                if (pc_mode) {
+                        tud_task();
+                        usb_pc_task();
+                } else {
+                        tuh_task();
+                        hid_app_task();
+                }
+#elif USB_PC
+                tud_task();
+                usb_pc_task();
+#else
                 tuh_task();
                 hid_app_task();
+#endif
                 poll_led_etc();
 	}
 

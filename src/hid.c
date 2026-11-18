@@ -66,7 +66,10 @@ int cursor_button = 0;
 /* Small in-RAM event log (time in ms since boot), saved to the SD card by
  * main.c: handy since the only USB port is busy with the keyboard.
  */
-static char hid_logbuf[3072];
+#ifndef HID_LOG_SIZE
+#define HID_LOG_SIZE    3072
+#endif
+static char hid_logbuf[HID_LOG_SIZE];
 static volatile unsigned int hid_loglen = 0;
 
 void hid_log(const char *fmt, ...)
@@ -99,6 +102,7 @@ const char *hid_log_get(unsigned int *len)
 
 volatile bool hid_kbd_mounted = false;
 volatile bool hid_kbd_seen = false;
+volatile bool hid_any_mounted = false;    /* Any HID interface has enumerated (USB_AUTO mode detection) */
 volatile int8_t hid_boot_digit = -1;
 
 //--------------------------------------------------------------------+
@@ -638,7 +642,10 @@ static void process_report(hid_itf_t *h, const uint8_t *r, uint16_t len)
  * Ask for the current state with GET_REPORT as soon as it's mounted; the
  * reply is processed like any other report.
  */
-static uint8_t init_buf[CFG_TUH_HID][72];
+#ifndef HID_INIT_BUF_SIZE
+#define HID_INIT_BUF_SIZE       72
+#endif
+static uint8_t init_buf[CFG_TUH_HID][HID_INIT_BUF_SIZE];
 
 #define INIT_REQ_DELAY_MS       300     /* After the last interface mounted */
 static bool     init_pending[CFG_TUH_HID];
@@ -713,6 +720,7 @@ void hid_app_task(void)
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len)
 {
         last_mount_ms = time_us_32() / 1000;    /* Enumeration is still going on */
+        hid_any_mounted = true;
 
         if (instance >= CFG_TUH_HID)
                 return;
@@ -757,6 +765,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
                                 nk++;
                 hid_log("  itf %d usable: %d fields, %d key fields, report IDs %s", instance,
                         h->n_fields, nk, h->has_ids ? "yes" : "no");
+                if (nk > 0)
+                        hid_kbd_mounted = true;
         }
 
         if (!tuh_hid_receive_report(dev_addr, instance))
@@ -792,6 +802,22 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
                 memset(h, 0, sizeof(*h));
                 update_cursor_button();
         }
+}
+
+/* Has a keyboard enumerated and had time to report its state (nothing held is a
+ * report too, but not every keyboard sends one)?  The boot-key wait ends on this,
+ * so a keyboard with no key held doesn't delay the boot by the whole wait.
+ */
+bool hid_kbd_ready(void)
+{
+        if (hid_kbd_seen)
+                return true;
+        if (!hid_kbd_mounted)
+                return false;
+        for (uint8_t i = 0; i < CFG_TUH_HID; i++)
+                if (init_pending[i])
+                        return false;   /* Still asking for the initial key state */
+        return (int32_t)(time_us_32() / 1000 - last_mount_ms) >= 450;
 }
 
 // Reply to request_initial_keys()

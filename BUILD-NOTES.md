@@ -54,3 +54,24 @@
 
 For the 128K build use MEMSIZE=128 in both places (video.c / DISP settings unchanged).
 The ROM and disc images are not included.
+
+## Disk activity light and PC control (from andshort's pull request #1)
+
+* **Disk light** (`src/video.c`): a white bar is drawn below the picture for `VIDEO_DISK_FRAMES` (6)
+  frames after each disk read or write (SD images, and the in-flash disc, which is now read through a
+  function so it can be seen). Its position is set by `VIDEO_DISK_X/W/Y/H`: by default 32 px wide
+  against the right edge of the panel, 80 lines up from the bottom. Adjust to match the floppy slot in the case.
+* **PC control** (`-DUSB_PC=ON`): the Pico becomes a USB serial device instead of a USB host, so no
+  keyboard or mouse can be plugged in; boot-key select and `picolog.txt` are not available in this mode.
+  The screen is sent to the PC and the PC's mouse and keyboard are sent back. The protocol is in
+  `include/usb_pc.h`; `tools/PicoMacViewer` is a macOS app that uses it (source in `tools/PicoMacViewer/source`; run its `build.sh` on a Mac to build "Pico Mac.app" into `tools/PicoMacViewer`). The app is only ad-hoc signed, so macOS warns about a downloaded copy: right-click it, choose Open, and confirm once.
+  Unlike the original, the changed-line detection keeps a hash per line rather than a copy of the screen,
+  so the RAM use is about the same as the normal build and it fits the 208K option.
+* The 240x180 2x2 display mode from the same pull request is not included.
+* **Automatic mode** (`-DUSB_AUTO=ON`, instead of USB_PC): one firmware for both. At power-on the Pico is a
+  USB host and waits up to `USB_AUTO_WAIT_MS` (4000) for a keyboard or mouse; the Mac starts as soon as one
+  appears. If none does, it restarts once as the PC-controlled serial device (the mode is passed across the
+  restart in a watchdog scratch register and used for that boot only, so a reset looks for a keyboard again).
+  Both USB stacks need RAM, so in this mode the diagnostic log (`HID_LOG_SIZE`), the key-state request buffer,
+  the serial buffers and the changed-line hashes (16 bit) are smaller; it fits the 208K build with about
+  0.6 KB to spare. Plugging a keyboard in after power-on in PC mode does nothing until the next power cycle.

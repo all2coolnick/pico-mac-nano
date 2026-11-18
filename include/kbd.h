@@ -31,6 +31,7 @@
 #include <stdbool.h>
 
 bool            kbd_queue_empty();
+bool            kbd_queue_full();
 /* If empty, return 0, else return a mac keycode in [7:0] and [15] set if a press (else release) */
 uint16_t        kbd_queue_pop();
 /* kbd_queue_pop() value: [7:0] key code, [15] press (else release),
@@ -48,6 +49,8 @@ bool            kbd_queue_push(uint8_t hid_keycode, bool pressed);
  * seen pressed, or -1.
  */
 extern volatile bool    hid_kbd_seen;
+extern volatile bool    hid_any_mounted;
+bool                    hid_kbd_ready(void);
 void hid_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 const char *hid_log_get(unsigned int *len);
 extern volatile bool    hid_kbd_mounted;        /* A keyboard interface has enumerated */
