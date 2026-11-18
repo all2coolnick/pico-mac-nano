@@ -46,6 +46,10 @@ set(TFT_SPI_CLK 2 CACHE STRING "TFT SPI SCK pin")
 set(TFT_SPI_CS 14 CACHE STRING "TFT SPI CS pin")
 set(TFT_RESET 15 CACHE STRING "TFT hard reset pin")
 
+option(USB_PC "Control from a PC over USB (serial), instead of a USB keyboard and mouse; see tools/PicoMacViewer" false)
+
+option(USB_AUTO "Start as a USB host (keyboard/mouse); if none is found, restart as a PC-controlled USB serial device (see USB_PC)" false)
+
 option(BEEP "Generate startup Beep (the Mac now plays its own chime via SOUND)" false) 
 option(SOUND "Play Mac sound via PWM on the audio pins" true)
 set(GPIO_AUDIO 13 CACHE STRING "Audio signal out pin")
@@ -97,7 +101,7 @@ if (USE_SD)
    set(EXTRA_SD_SRC src/sd_hw_config.c)
    set(EXTRA_SD_LIB FatFs_SPI)
    add_compile_definitions(SD_TX=${SD_TX} SD_RX=${SD_RX} SD_SCK=${SD_SCK} SD_CS=${SD_CS} SD_MHZ=${SD_MHZ})
-   if (SD_BOOT_SELECT)
+   if (SD_BOOT_SELECT AND (NOT USB_PC OR USB_AUTO))
       add_compile_definitions(SD_SELECT_WAIT_MS=${SD_SELECT_WAIT_MS})
    else()
       # No boot-key selection: no keyboard wait, no connect-time key-state request
@@ -130,12 +134,28 @@ if (BEEP OR SOUND)
    add_compile_definitions(GPIO_AUDIO=${GPIO_AUDIO} GPIO_AUDIO_INV=${GPIO_AUDIO_INV})
 endif()
 
+if (USB_AUTO)
+   # Both: host mode (hid.c) first, PC mode (usb_pc.c) if no keyboard/mouse appears
+   # Both USB stacks need RAM: shrink the diagnostic log and the key-state request buffer
+   add_compile_definitions(USB_AUTO=1 USB_PC=1 HID_LOG_SIZE=512 HID_INIT_BUF_SIZE=32)
+   set(EXTRA_USB_SRC src/hid.c src/usb_pc.c src/usb_descriptors.c)
+   set(EXTRA_USB_LIB tinyusb_host tinyusb_device pico_bootrom)
+elseif (USB_PC)
+   # The Pico is a USB serial device, not a host: no keyboard/mouse (hid.c)
+   add_compile_definitions(USB_PC=1)
+   set(EXTRA_USB_SRC src/usb_pc.c src/usb_descriptors.c)
+   set(EXTRA_USB_LIB tinyusb_device pico_bootrom)
+else()
+   set(EXTRA_USB_SRC src/hid.c)
+   set(EXTRA_USB_LIB tinyusb_host)
+endif()
+
 if (TARGET tinyusb_device)
   add_executable(firmware
     src/main.c
     src/video.c
     src/kbd.c
-    src/hid.c
+    ${EXTRA_USB_SRC}
     ${EXTRA_AUDIO_SRC}
     ${EXTRA_PICOZERO_SRC}
     ${EXTRA_TFT2P_SRC}
@@ -157,7 +177,7 @@ if (TARGET tinyusb_device)
   target_link_libraries(firmware
     pico_stdlib
     pico_multicore
-    tinyusb_host
+    ${EXTRA_USB_LIB}
     tinyusb_board
     hardware_dma
     hardware_pwm

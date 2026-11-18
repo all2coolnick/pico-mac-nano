@@ -29,5 +29,7 @@
 #include <inttypes.h>
 
 void    video_init(uint32_t *framebuffer);
+/* Light the disk activity bar (call on each disk read/write) */
+void    video_disk_activity(void);
 
 #endif

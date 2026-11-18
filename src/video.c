@@ -82,6 +82,16 @@
 #define VIDEO_FB_V_VIS_START    118      /* Was (VIDEO_V_VIS_START + ((VIDEO_VRES - VIDEO_FB_VRES)/2)) */
 #define VIDEO_FB_V_VIS_END      (VIDEO_FB_V_VIS_START + VIDEO_FB_VRES)
 
+/* Disk activity light: a white bar in the lower right corner of the panel,
+ * below the picture, behind the case's floppy slot.  X and width are in
+ * pixels along the line, Y and height in display lines.  Adjust to suit the case.
+ */
+#define VIDEO_DISK_W            32                      /* Width, against the right edge of the panel */
+#define VIDEO_DISK_X            (VIDEO_FB_HRES - VIDEO_DISK_W)
+#define VIDEO_DISK_H            80                      /* Lines up from the bottom */
+#define VIDEO_DISK_Y            (VIDEO_V_VIS_END - VIDEO_DISK_H)
+#define VIDEO_DISK_FRAMES       6                       /* Frames to stay lit after each disk access */
+
 /* Words of 1BPP pixel data per line; this dictates the length of the
  * video data DMA transfer:
  */
@@ -95,6 +105,9 @@
 // Video DMA, framebuffer pointers
 
 static uint32_t video_null[VIDEO_VISIBLE_WPL];
+static uint32_t video_disk_line[VIDEO_VISIBLE_WPL];     /* A blank line with the bar in it */
+static volatile unsigned int video_disk_frames = 0;
+static bool video_disk_lit = false;     /* Only changes between frames, so the bar is never half drawn */
 static uint32_t *video_framebuffer;
 
 /* DMA buffer containing 2 pairs of per-line config words, for VS and not-VS: */
@@ -132,6 +145,8 @@ static const uint32_t   *__not_in_flash_func(video_line_addr)(unsigned int y)
         int vy = video_get_visible_y(y);
         if (vy >= 0)
                 return (const uint32_t *)&video_framebuffer[vy * VIDEO_VISIBLE_WPL];
+        else if (video_disk_lit && (y >= VIDEO_DISK_Y) && (y < (VIDEO_DISK_Y + VIDEO_DISK_H)))
+                return (const uint32_t *)video_disk_line;
         else
                 return (const uint32_t *)video_null;
 }
@@ -170,8 +185,12 @@ static void    __not_in_flash_func(video_dma_prep_new)()
         video_dmadescr_data.raddr = video_line_addr(video_current_y);
 
         /* Frame done */
-        if (++video_current_y >= VIDEO_V_TOTAL)
+        if (++video_current_y >= VIDEO_V_TOTAL) {
                 video_current_y = 0;
+                video_disk_lit = (video_disk_frames > 0);
+                if (video_disk_lit)
+                        video_disk_frames--;
+        }
 }
 
 static void     __not_in_flash_func(video_dma_irq)()
@@ -188,9 +207,20 @@ static void     __not_in_flash_func(video_dma_irq)()
         }
 }
 
+/* Light the disk activity bar.  Called for each disk read/write. */
+void    video_disk_activity(void)
+{
+        video_disk_frames = VIDEO_DISK_FRAMES;
+}
+
 static void     video_prep_buffer()
 {
         memset(video_null, 0xff, VIDEO_VISIBLE_WPL * 4);
+
+        /* Same as a blank line, with white (0) pixels for the bar: */
+        memset(video_disk_line, 0xff, VIDEO_VISIBLE_WPL * 4);
+        for (unsigned int x = VIDEO_DISK_X; x < (VIDEO_DISK_X + VIDEO_DISK_W); x++)
+                ((uint8_t *)video_disk_line)[x / 8] &= ~(0x80 >> (x % 8));
 
         /* Signed maths: the total line length stays the same, the image just moves. */
         int left_pad  = (VIDEO_HRES - VIDEO_FB_HRES)/2 + VIDEO_FB_HSHIFT;
