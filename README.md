@@ -50,7 +50,8 @@ The firmware folder includes the following firmware versions :
 
 ## disk_images
 
-The disk_images folder contains writeable disk image files (.img) files for booting pico-mac-nano from a micro-SD card. Copy one of them to an ExFAT formatted micro-SD card (If you want to change the file name, make sure it still starts with "umac0") then with your pico-mac-nano powered down, insert the card into the slot on the rear (The card must be upside down due to the orientation of the SD board). When you power up, it should detect the SD card and the boot image, and boot from that instead of the built in disk image. This disk image is writeable so unlike the built in disk image, any changes made to the contents of the disk while booted from it will remain. This is good in that you can save files you worked on, plus some applications like MacPaint require a writeable boot disk to run, but it also means it can become corrupted during a system crash.
+The disk_images folder contains writeable disk image files (.img) files for booting pico-mac-nano from a micro-SD card. Copy one of them to an ExFAT formatted micro-SD card (If you want to change the file name, make sure it still starts with "umac0") then with your pico-mac-nano powered down, insert the card into the slot on the rear (The card must be upside down due to the orientation of the SD board). When you power up, it should detect the SD card and the boot image, and boot from that instead of the built in disk image. This disk image is writeable so unlike the built in disk image, any changes made to the contents of the disk while booted from it will remain. This is good in that you can save files you worked on, plus some applications like MacPaint require a writeable boot disk to run, but it also means it can become corrupted during a system crash. 
+See the 'Disc image' section in the notes below for details of advanced disk functionality such as using a keyboard to select which disk image to boot with from multiple disk images stored on the same SD card, and having additional disk images automatically mount on the desktop in addition to the boot disk.
 
 The version 1 file is a 10MB .img version of the built in .dsk disk image used in all pico-mac-nanos shipped to date. Subsequent versions add more applications, utilities and games which have been found to broadly work within pico-mac.
 
@@ -264,8 +265,7 @@ This limit does not apply for images stored on the SD card.  (I don't know what 
 HFS limits are.  But if you make a 50MB disc you're unlikely to fill
 it with software that actually works on the _Mac 128K_ :) )
 
-Use a FAT-formatted micro-SD card, copy your disc image(s) onto it at the root level and named as follows.
-into _one_ of the following files in the root of the card:
+Use a FAT-formatted micro-SD card, copy your disc image(s) onto it at the root level and named as follows:
 
    * umac0.img :  Default read/write disc image used to boot the Mac
    * umac1.img ... umac9.img : Read/write boot disk selectable by holding number key down at startup
