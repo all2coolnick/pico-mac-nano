@@ -240,6 +240,7 @@ static FIL discfp[DISC_NUM_DRIVES];
 #if USE_SD
 /* Which disc image to boot: umac<N>*.img, where N is a number key held
  * down while powering on (a USB keyboard takes a moment to enumerate, so
+        video_disk_activity();
  * wait for it, but not for long if there isn't one).  No key means 0.
  */
 #ifndef SD_SELECT_WAIT_MS
@@ -253,6 +254,7 @@ static int      boot_image_number(void)
 
         absolute_time_t t0 = get_absolute_time();
         absolute_time_t end = delayed_by_ms(t0, SD_SELECT_WAIT_MS);
+        video_disk_activity();
         while (!hid_kbd_seen && !time_reached(end))
                 sleep_ms(5);
         int seen_ms = (int)(absolute_time_diff_us(t0, get_absolute_time()) / 1000);
@@ -350,7 +352,8 @@ static void     open_extra_volumes(disc_descr_t discs[DISC_NUM_DRIVES])
 
 static void     use_flash_disc(disc_descr_t discs[DISC_NUM_DRIVES])
 {
-        discs[0].base = (void *)umac_disc;
+        discs[0].base = 0; // Means use read op, which is how disk activity is seen
+        discs[0].op_read = disc_do_read_flash;
         discs[0].read_only = 1;
         discs[0].size = sizeof(umac_disc);
 }
@@ -375,6 +378,14 @@ static void     disc_setup(disc_descr_t discs[DISC_NUM_DRIVES])
         if (!found && n != 0) {
                 printf("  Falling back to umac0\n");
                 found = open_image("umac", 0, 0, discs, false);
+/* In-flash disc: read through a function (not directly) so disk activity shows */
+static int      disc_do_read_flash(void *ctx, uint8_t *data, unsigned int offset, unsigned int len)
+{
+        memcpy(data, &umac_disc[offset], len);
+        video_disk_activity();
+        return 0;
+}
+
         }
         if (!found)
                 use_flash_disc(discs);
