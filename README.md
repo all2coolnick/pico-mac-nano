@@ -20,10 +20,15 @@ This involved the following steps:
    	 - configure the LCD via SPI interface shared with SD card module
    	 - output suitable 480x342 pixel frame buffer data for the LCD
    	 - use the Pico Zero's built in Neo-pixel RGB LED
-   	 - output out of phase 600Hz square waves on two GPIOs for 1s at startup to simulate
-   	  the Macintosh startup beep
+   	 - output out of phase square wave audio on two GPIOs
 
 The finished Macintosh is just 62mm high but houses a 2.0" TFT LCD panel, rp2040 Pico Zero MCU, micro-SD card reader and the custom PCB.
+
+Subsequent additional changes have been made to add features:
+   * Modify umac for full audio and multi-disk support
+   * Add boot image select whereby you can select which disk image file on an SD card to boot from
+   * Improve USB HID support so it works with most wired USB or 2.4GHz wireless keyboards and mice
+   * Add addshort's code to flash a white square behind the floppy disk slot during disk activity
 
 For more details on the journey, design decisions and further development, see the [pico-mac-nano project page](https://blog.1bitrainbow.com/pico-mac-nano/).
 
@@ -147,6 +152,7 @@ It has features, many features, the best features:
      memory and run as a _Mac 208K_
    * Full audio support
    * Mount multiple disks
+   * Select boot image from keyboard
 
 Great features.  It even doesn't hang at random!  (Anymore.)
 
@@ -253,15 +259,19 @@ the various forums and MacintoshRepository.  See the `umac` README for
 info on formats (it needs to be raw data without header).
 
 The image size can be whatever you have space for in flash (typically
-about 1.3MB is free there), or on the SD card.  (I don't know what the
+about 1.3MB is free there).
+This limit does not apply for images stored on the SD card.  (I don't know what the
 HFS limits are.  But if you make a 50MB disc you're unlikely to fill
 it with software that actually works on the _Mac 128K_ :) )
 
-Use a FAT-formatted micro-SD card and copy your disc image
+Use a FAT-formatted micro-SD card, copy your disc image(s) onto it at the root level and named as follows.
 into _one_ of the following files in the root of the card:
 
-   * `umac0.img`:  A normal read/write disc image
-   * `umac0ro.img`:  A read-only disc image
+   * umac0.img :  Default read/write disc image used to boot the Mac
+   * umac1.img ... umac9.img : Read/write boot disk selectable by holding number key down at startup
+   * vol1.img ... vol3.img : Read/write disks that automatically mount on the desktop after boot (3 max).
+
+Adding 'ro' after the digit in any of the above disk image filenames (i.e. 'umac0ro.img') will make the disk read only.
 
 ## Putting it together, and building
 
