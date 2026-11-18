@@ -3,7 +3,7 @@
 <img alt="pico-mac-nano" src="https://github.com/user-attachments/assets/d9a80395-f821-47a4-9e62-aa7472d8036d" height="160px" />
 <img alt="pico-mac-nano" src="https://github.com/user-attachments/assets/5b1be959-36a9-44cd-a6f1-652e655c3235" height="160px" /><img alt="big brother" src="https://github.com/user-attachments/assets/53f04e85-f4c4-42e8-bdb0-ae4d853ce238" height="160px" /><img alt="inside" src="https://github.com/user-attachments/assets/92f52392-7c24-46c8-81e2-6b47628ced43" height="160px" />
 
-v0.3 20 May 2025
+v2.0 18 Nov 2026
 
 Fork of https://github.com/evansm7/pico-mac v0.21
 
@@ -25,7 +25,7 @@ This involved the following steps:
 
 The finished Macintosh is just 62mm high but houses a 2.0" TFT LCD panel, rp2040 Pico Zero MCU, micro-SD card reader and the custom PCB.
 
-For more details on the journey and design decisions, see the [pico-mac-nano project page](https://blog.1bitrainbow.com/pico-mac-nano/).
+For more details on the journey, design decisions and further development, see the [pico-mac-nano project page](https://blog.1bitrainbow.com/pico-mac-nano/).
 
 ## PCB files
 
@@ -35,18 +35,23 @@ The PCB folder contains all the gerber, drill hole, position and BOM files for t
 
 The 3D_model folder contains the .stl files for 3D printing the case, battery power module and box inserts (for a 75mm cube box). The case is comprised of the front housing, rear housing, switch blank (blocks the switch apperture intended for the [battery power module](https://www.1bitrainbow.com/parts-store.php?cPath=980_P4470)) and reset/boot select button actuator. The battery module comprises upper and lower halves and the rocker switch. The box folder contains the top and bottom insert files and the two halves of the accessory box.
 
-## Firmware Files
+## firmware
 
-The firmware folder contains pre-built .uf2 rp2040 firmware files for the Pico Zero. This includes the following versions :
-**v3.2** built with the standard 128K RAM (this is the version used on all pre-assembled & kit form pico-mac-nanos shipped up until 19th November 2026). 
+The firmware folder contains pre-built .uf2 rp2040 firmware files for the Pico Zero which can be flashed onto any pico-mac-nano. Simply download the firmware file to your computer, hold down the 'B' boot select button on the underside of your pico-mac-nano while you connect it directly to your computer with a USB cable (it should now appear on your computer as a disk called RPI-RP2), then drag the firmware file onto the new disk. It will take about 20-30s to copy over and then the pico-mac-nano will restart using the new firmware. 
+The firmware folder includes the following firmware versions :
+**v3.2** Original production release built with the standard 128K RAM (this is the version used on all pre-assembled & kit form pico-mac-nanos shipped up until 19th November 2026). 
 **v19** no longer uses my hacked Mac Plus ROM. Instead it adopts Matt Evans' newer pico-mac code to patch the ROM to the desired screen resolution based on the build parameters. It is also built with the 208K RAM option which allows it to run MacPaint, but only when booted from a disk image on a micro-SD card. This is because the disk image contained in the pico-mac-nano firmware is read-only and MacPaint requires a writeable disk. 
-**v21** includes a raft of additional features; fun audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's disk light and PC control. 
+**v21** includes a raft of additional features; fun audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's very cool disk light and PC control functions. 
 
-## Disk Images
+## disk_images
 
 The disk_images folder contains writeable disk image files (.img) files for booting pico-mac-nano from a micro-SD card. Copy one of them to an ExFAT formatted micro-SD card (If you want to change the file name, make sure it still starts with "umac0") then with your pico-mac-nano powered down, insert the card into the slot on the rear (The card must be upside down due to the orientation of the SD board). When you power up, it should detect the SD card and the boot image, and boot from that instead of the built in disk image. This disk image is writeable so unlike the built in disk image, any changes made to the contents of the disk while booted from it will remain. This is good in that you can save files you worked on, plus some applications like MacPaint require a writeable boot disk to run, but it also means it can become corrupted during a system crash.
 
 The version 1 file is a 10MB .img version of the built in .dsk disk image used in all pico-mac-nanos shipped to date. Subsequent versions add more applications, utilities and games which have been found to broadly work within pico-mac.
+
+## tools
+
+This currently only contains andshort's PicoMacViewer native app for Macintosh that, when used in conjunction with pico-mac-firmware v21 or later, displays the pico-mac-nano's screen in a window on your Mac and allows you to control it with your Mac. The pico-mac-nano must be connected directly to your Mac with a USB cable (don't use the splitter cable it came with). The PicoMacViewer folder contains both the source code and a zip file of the app pre-compiled for Intel and Apple silicon Macs running MacOS 12 or later.
 
 ## Other folders
 
@@ -125,8 +130,8 @@ As with the pico-mac project, pico-mac-nano is a personal hobby project and proo
 
 Below is a modified version of [evansm7](https://github.com/evansm7) original readme from pico-mac v0.21 minus the Hardware Construction section since this variant uses a custom PCB so there is none of the original construction to be done.
 
-# Pico Micro Mac (pico-umac) v0.2
-This project embeds the [umac Mac 128K
+# Pico Micro Mac (pico-umac)
+This project embeds a modified version of the [umac Mac 128K
 emulator](https://github.com/evansm7/umac) project into a Raspberry Pi
 Pico microcontroller.  At long last, the worst Macintosh in a cheap,
 portable form factor!
@@ -140,6 +145,8 @@ It has features, many features, the best features:
      disc storage on an SPI-attached SD card
    * Mac 128K by default, or you can make use of more of the Pico's
      memory and run as a _Mac 208K_
+   * Full audio support
+   * Mount multiple disks
 
 Great features.  It even doesn't hang at random!  (Anymore.)
 
@@ -151,7 +158,9 @@ storage in addition to the _Mac 208K_ config.
 
 To build this project yourself, you'll need at least a WaveShare Pico Zero or compatible board, a 3D printer, the 2.0" LCD panel, SPI micro-SD card module, interconnect PCB, USB mouse (and maybe a USB keyboard/hub), plus a suitable OTG USB splitter.
 
-# Build
+# Software Build
+
+Ready built firmware files are provided in the firmware folder but if you wish to you can build from the source files yourself.
 
 ## Prerequisites/essentials
 
