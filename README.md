@@ -44,8 +44,11 @@ The 3D_model folder contains the .stl files for 3D printing the case, battery po
 
 The firmware folder contains pre-built .uf2 rp2040 firmware files for the Pico Zero which can be flashed onto any pico-mac-nano. Simply download the firmware file to your computer, hold down the 'B' boot select button on the underside of your pico-mac-nano while you connect it directly to your computer with a USB cable (it should now appear on your computer as a disk called RPI-RP2), then drag the firmware file onto the new disk. It will take about 20-30s to copy over and then the pico-mac-nano will restart using the new firmware. 
 The firmware folder includes the following firmware versions :
+
 **v3.2** Original production release built with the standard 128K RAM (this is the version used on all pre-assembled & kit form pico-mac-nanos shipped up until 19th November 2026). 
+
 **v19** no longer uses my hacked Mac Plus ROM. Instead it adopts Matt Evans' newer pico-mac code to patch the ROM to the desired screen resolution based on the build parameters. It is also built with the 208K RAM option which allows it to run MacPaint, but only when booted from a disk image on a micro-SD card. This is because the disk image contained in the pico-mac-nano firmware is read-only and MacPaint requires a writeable disk. 
+
 **v21** includes a raft of additional features; fun audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's very cool disk light and PC control functions. 
 
 ## disk_images
