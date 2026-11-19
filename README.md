@@ -27,8 +27,8 @@ The finished Macintosh is just 62mm high but houses a 2.0" TFT LCD panel, rp2040
 Subsequent additional changes have been made to add features:
    * Modify umac for full audio and multi-disk support
    * Add boot image select whereby you can select which disk image file on an SD card to boot from
-   * Improve USB HID support so it works with most wired USB or 2.4GHz wireless keyboards and mice
-   * Add addshort's code to flash a white square behind the floppy disk slot during disk activity
+   * Improve USB HID support so it works with many more wired USB and 2.4GHz wireless keyboards and mice
+   * Add addshort's disklight code to flash a white square behind the floppy disk slot during disk activity
 
 For more details on the journey, design decisions and further development, see the [pico-mac-nano project page](https://blog.1bitrainbow.com/pico-mac-nano/).
 
@@ -40,7 +40,7 @@ The PCB folder contains all the gerber, drill hole, position and BOM files for t
 
 The 3D_model folder contains the .stl files for 3D printing the case, battery power module and box inserts (for a 75mm cube box). The case is comprised of the front housing, rear housing, switch blank (blocks the switch apperture intended for the [battery power module](https://www.1bitrainbow.com/parts-store.php?cPath=980_P4470)) and reset/boot select button actuator. The battery module comprises upper and lower halves and the rocker switch. The box folder contains the top and bottom insert files and the two halves of the accessory box.
 
-## firmware
+## Firmware
 
 The firmware folder contains pre-built .uf2 rp2040 firmware files for the Pico Zero which can be flashed onto any pico-mac-nano. Simply download the firmware file to your computer, hold down the 'B' boot select button on the underside of your pico-mac-nano while you connect it directly to your computer with a USB cable (it should now appear on your computer as a disk called RPI-RP2), then drag the firmware file onto the new disk. It will take about 20-30s to copy over and then the pico-mac-nano will restart using the new firmware. 
 The firmware folder includes the following firmware versions :
@@ -51,7 +51,7 @@ The firmware folder includes the following firmware versions :
 
 **v21** includes a raft of additional features; full audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's very cool disk light and PC control functions. 
 
-## disk_images
+## Disk images
 
 The disk_images folder contains writeable disk image files (.img) files for booting pico-mac-nano from a micro-SD card. Copy one of them to an ExFAT formatted micro-SD card (If you want to change the file name, make sure it still starts with "umac0") then with your pico-mac-nano powered down, insert the card into the slot on the rear (The card must be upside down due to the orientation of the SD board). When you power up, it should detect the SD card and the boot image, and boot from that instead of the built in disk image. This disk image is writeable so unlike the built in disk image, any changes made to the contents of the disk while booted from it will remain. This is good in that you can save files you worked on, plus some applications like MacPaint require a writeable boot disk to run, but it also means it can become corrupted during a system crash. 
 
@@ -59,11 +59,9 @@ See the 'Disc image' section in the notes below for details of advanced disk fun
 
 The version 1 file is a 10MB .img version of the built in .dsk disk image used in all pico-mac-nanos shipped to date. Subsequent versions add more applications, utilities and games which have been found to broadly work within pico-mac.
 
-## tools
-
-This currently only contains andshort's PicoMacViewer native app for Macintosh that, when used in conjunction with pico-mac-firmware v21 or later, displays the pico-mac-nano's screen in a window on your Mac and allows you to control it with your Mac. The pico-mac-nano must be connected directly to your Mac with a USB cable (don't use the splitter cable it came with). The PicoMacViewer folder contains both the source code and a zip file of the app pre-compiled for Intel and Apple silicon Macs running MacOS 12 or later.
-
 ## Other folders
+
+The tools directory contains andshort's PicoMacViewer native app for Macintosh which, when used in conjunction with pico-mac-firmware v21 or later, displays the pico-mac-nano's screen in a window on your Mac and allows you to control it remotely. The pico-mac-nano must be connected directly to your Mac with a USB cable (don't use the splitter cable it came with). The PicoMacViewer folder contains both the source code and a zip file of the app pre-compiled for Intel and Apple silicon Macs running MacOS 12 or later.
 
 Data sheets for the TFT module and the controller are in the data_sheets directory.
 
