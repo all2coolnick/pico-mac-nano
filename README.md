@@ -49,7 +49,7 @@ The firmware folder includes the following firmware versions :
 
 **v19** no longer uses my hacked Mac Plus ROM. Instead it adopts Matt Evans' newer pico-mac code to patch the ROM to the desired screen resolution based on the build parameters. It is also built with the 208K RAM option which allows it to run MacPaint, but only when booted from a disk image on a micro-SD card. This is because the disk image contained in the pico-mac-nano firmware is read-only and MacPaint requires a writeable disk. 
 
-**v21** includes a raft of additional features; full audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's very cool disk light and PC control functions. 
+**v22** includes a raft of additional features; full audio support, improved USB device support, fixed pre-boot flicker, boot image select, multiple volume support, and andshort's very cool disk light and PC control functions. There is a standard 128K build and one with the 208K memory option enabled.
 
 ## Disk images
 
