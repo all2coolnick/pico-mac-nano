@@ -41,6 +41,11 @@
 * PC control ignores the viewer's mouse position for the first `USB_PC_MOUSE_HOLDOFF_MS` (6000)
   after power-on. A 128K Mac tests all its RAM at boot, and a write into it then caused an
   occasional Sad Mac.
+* Sound effects from VIA Timer 1 (umac `src/via.c`, `src/main.c`): many games (Lode Runner,
+  Destroyer, Mouse Eaters, CrystalRaider...) make tones by running VIA Timer 1 with its output on
+  PB7 (ACR bits 7:6 = 11), which switches the sound output on and off at the timer rate, with
+  nothing written to the sound buffer. umac now tracks the T1 latch and gates the sound buffer
+  with that square wave, as Mini vMac does (`umac_audio_get_frame()`).
 * `CMakeLists.txt`: SOUND option, hardware_pwm, audio pin defaults 13/12.
 
 ## Building (208K, 480-wide desktop in the classic 512-wide layout, stock Mac Plus v3 ROM)
