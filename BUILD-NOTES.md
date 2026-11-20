@@ -30,17 +30,29 @@
   (M0110A): `0x79` then the key code (`0x71` Shift first for + * / =). umac now
   has a small keyboard byte FIFO and answers the Instant command (0x14), which the
   Mac uses to fetch the byte after the 0x79 prefix.
-* Screen position (`src/video.c`): `VIDEO_FB_HSHIFT` (-16) moves the 480-wide image left so
-  it sits where the older 512-wide-FB builds put it (v9-v10 were shifted 16 px right, cutting
-  off the right edge). Total line length is unchanged; tune the value if the edge is off.
-* `src/video.c`: VIDEO_FB_HRES is 480 (matches a ROM patched by umac to 480x342).
+* Screen layout (umac `src/rom.c`, `src/video.c`): the Mac's framebuffer now keeps the classic
+  Mac Plus layout (512 pixels, 64 bytes per row, standard address). Software such as the ALICE
+  chess game hard-codes that layout and crashes if the screen is moved for 480 pixels. umac's new
+  `DISP_VISIBLE_WIDTH=480` option patches only the *width* the ROM believes in (screen size,
+  cursor clipping, Welcome box edge) so the desktop fits the 480-pixel panel. `video.c` outputs the
+  left 480 pixels of each 512-pixel row (`VIDEO_FB_HSHIFT` is 0 in this mode); the disk light and
+  PC control viewer use the visible width. The old relocated-screen 480 mode (`DISP_WIDTH=480`,
+  no `DISP_VISIBLE_WIDTH`) is still supported but is not recommended.
+* PC control ignores the viewer's mouse position for the first `USB_PC_MOUSE_HOLDOFF_MS` (6000)
+  after power-on. A 128K Mac tests all its RAM at boot, and a write into it then caused an
+  occasional Sad Mac.
+* Sound effects from VIA Timer 1 (umac `src/via.c`, `src/main.c`): many games (Lode Runner,
+  Destroyer, Mouse Eaters, CrystalRaider...) make tones by running VIA Timer 1 with its output on
+  PB7 (ACR bits 7:6 = 11), which switches the sound output on and off at the timer rate, with
+  nothing written to the sound buffer. umac now tracks the T1 latch and gates the sound buffer
+  with that square wave, as Mini vMac does (`umac_audio_get_frame()`).
 * `CMakeLists.txt`: SOUND option, hardware_pwm, audio pin defaults 13/12.
 
-## Building (208K, 480x342, stock Mac Plus v3 ROM)
+## Building (208K, 480-wide desktop in the classic 512-wide layout, stock Mac Plus v3 ROM)
 
     # 1. umac host build, patches the ROM:
     cd external/umac
-    make DISP_WIDTH=480 DISP_HEIGHT=342 MEMSIZE=208
+    make DISP_WIDTH=512 DISP_HEIGHT=342 DISP_VISIBLE_WIDTH=480 MEMSIZE=208
     ./main -r /path/to/macplus_v3.ROM -W /tmp/rom.bin      # close the window once it opens
     xxd -i < /tmp/rom.bin  > ../../incbin/umac-rom.h
     xxd -i < /path/to/disk.dsk > ../../incbin/umac-disc.h  # 1.25MB disc image
@@ -48,11 +60,11 @@
     # 2. firmware (Pico SDK 2.1+ needed: 2.0.0 overflows flash with the embedded disc):
     mkdir build && cd build
     export PICO_SDK_PATH=/path/to/pico-sdk
-    CFLAGS="-DDISP_WIDTH=480 -DDISP_HEIGHT=342" cmake .. -DPICO_BOARD=pico \
+    CFLAGS="-DDISP_WIDTH=512 -DDISP_HEIGHT=342 -DDISP_VISIBLE_WIDTH=480" cmake .. -DPICO_BOARD=pico \
         -DPICO_ZERO=ON -DTFT_2P=ON -DMEMSIZE=208 -DSOUND=ON
     make -j8                                               # -> firmware.uf2
 
-For the 128K build use MEMSIZE=128 in both places (video.c / DISP settings unchanged).
+For the 128K build use MEMSIZE=128 in both places (the DISP settings are unchanged).
 The ROM and disc images are not included.
 
 ## Disk activity light and PC control (from andshort's pull request #1)
