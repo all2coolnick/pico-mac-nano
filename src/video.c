@@ -68,7 +68,17 @@
 #define VIDEO_V_VIS_START       (VIDEO_VSW + VIDEO_VBP)
 #define VIDEO_V_VIS_END         (VIDEO_V_VIS_START + VIDEO_VRES)
 
+#if DISP_WIDTH == 512
+#define VIDEO_FB_HRES           512 /* the classic Mac layout: 64 bytes per row */
+#else
 #define VIDEO_FB_HRES           480 /* matches a ROM patched for a 480-wide screen */
+#endif
+/* Width of the Mac's screen that is actually shown (the panel shows 480): */
+#ifdef DISP_VISIBLE_WIDTH
+#define VIDEO_SHOWN_W           DISP_VISIBLE_WIDTH
+#else
+#define VIDEO_SHOWN_W           VIDEO_FB_HRES
+#endif
 #define VIDEO_FB_VRES           342
 
 /* Horizontal position of the Mac image on the panel, in pixels (negative =
@@ -76,7 +86,11 @@
  * wrap in the padding sum) started each line 16 pixels earlier than HBP; this
  * panel's visible area matches that, so keep the same position.
  */
+#if DISP_WIDTH == 512
+#define VIDEO_FB_HSHIFT         0
+#else
 #define VIDEO_FB_HSHIFT         (-16)
+#endif
 
 /* The lines at which the FB data is actively output: */
 #define VIDEO_FB_V_VIS_START    118      /* Was (VIDEO_V_VIS_START + ((VIDEO_VRES - VIDEO_FB_VRES)/2)) */
@@ -87,7 +101,7 @@
  * pixels along the line, Y and height in display lines.  Adjust to suit the case.
  */
 #define VIDEO_DISK_W            32                      /* Width, against the right edge of the panel */
-#define VIDEO_DISK_X            (VIDEO_FB_HRES - VIDEO_DISK_W)
+#define VIDEO_DISK_X            (VIDEO_SHOWN_W - VIDEO_DISK_W)
 #define VIDEO_DISK_H            80                      /* Lines up from the bottom */
 #define VIDEO_DISK_Y            (VIDEO_V_VIS_END - VIDEO_DISK_H)
 #define VIDEO_DISK_FRAMES       6                       /* Frames to stay lit after each disk access */

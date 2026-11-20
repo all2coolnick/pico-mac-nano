@@ -1,4 +1,4 @@
-/* Functions to output Macintosh Startup Beep using 600Hz square wave to GPIO14:
+/* Functions to output Macintosh Startup Beep using 600Hz square wave on GPIO_AUDIO / GPIO_AUDIO_INV (GPIO13/GPIO12 by default):
  *
  * Copyright 2025 Nick Gillard
  *

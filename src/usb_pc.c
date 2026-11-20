@@ -1,6 +1,7 @@
 /* Control the Mac from a PC, over a USB serial port.  See usb_pc.h.
  */
 
+#include "pico/time.h"
 #include <stdbool.h>
 #include <string.h>
 #include "hardware/timer.h"
@@ -17,7 +18,17 @@
 #define DISP_HEIGHT             342
 #endif
 
-#define BYTES_PER_LINE          (DISP_WIDTH / 8)
+/* The Mac's rows are DISP_WIDTH/8 bytes apart in RAM, but only the left
+ * DISP_VISIBLE_WIDTH pixels of each are on the screen (when it's set).
+ */
+#ifndef DISP_VISIBLE_WIDTH
+#define DISP_VISIBLE_WIDTH      DISP_WIDTH
+#endif
+#define ROW_STRIDE              (DISP_WIDTH / 8)
+#define BYTES_PER_LINE          (DISP_VISIBLE_WIDTH / 8)
+#ifndef USB_PC_MOUSE_HOLDOFF_MS
+#define USB_PC_MOUSE_HOLDOFF_MS 6000    /* Time after power-on before mouse positions are applied */
+#endif
 #define FRAME_US                33333   /* Look for screen changes at about 30Hz */
 #define LINES_PER_TASK          8       /* Keep servicing USB between lines */
 
@@ -111,6 +122,14 @@ void    usb_pc_poll(void)
         static uint32_t last = MOUSE_POS_NONE;
         uint32_t pos = mouse_pos;
 
+        /* Don't touch the Mac's memory while it is starting up.  A 128K Mac
+         * tests all of its RAM on boot (the umac ROM patch skips this only
+         * for larger sizes); a write into it then makes the test fail
+         * with a Sad Mac.  The PC viewer can send a position at any time.
+         */
+        if (to_ms_since_boot(get_absolute_time()) < USB_PC_MOUSE_HOLDOFF_MS)
+                return;
+
         if (pos != last) {
                 last = pos;
                 mac_write16(MAC_MTEMP, pos & 0xffff);
@@ -186,7 +205,7 @@ static void     poll_tx(void)
         if (send_size) {
                 if (tud_cdc_write_available() < 5)
                         return;
-                const uint8_t pkt[5] = { PKT_SIZE, DISP_WIDTH >> 8, DISP_WIDTH & 0xff,
+                const uint8_t pkt[5] = { PKT_SIZE, DISP_VISIBLE_WIDTH >> 8, DISP_VISIBLE_WIDTH & 0xff,
                                          DISP_HEIGHT >> 8, DISP_HEIGHT & 0xff };
                 tud_cdc_write(pkt, sizeof(pkt));
                 send_size = false;
@@ -211,7 +230,7 @@ static void     poll_tx(void)
                         return;
                 }
                 /* Copy first: the emulator is writing to this on the other core */
-                memcpy(&pkt[3], mac_fb + (scan_y * BYTES_PER_LINE), BYTES_PER_LINE);
+                memcpy(&pkt[3], mac_fb + (scan_y * ROW_STRIDE), BYTES_PER_LINE);
                 line_hash_t h = line_hash(&pkt[3]);
                 if (send_all || (h != sent_hash[scan_y])) {
                         sent_hash[scan_y] = h;

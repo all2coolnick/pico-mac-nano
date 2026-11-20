@@ -184,7 +184,7 @@ It'll give you a preview of the fun to come, plus is required to generate a patc
 
 ```
 cd external/umac
-make DISP_WIDTH=480 DISP_HEIGHT=342
+make DISP_WIDTH=512 DISP_HEIGHT=342 DISP_VISIBLE_WIDTH=480
 ```
 
 If you want to use a non-default memory size (i.e. >128K) you will
@@ -193,7 +193,7 @@ example:
 
 ```
 cd external/umac
-make DISP_WIDTH=480 DISP_HEIGHT=342 MEMSIZE=208
+make DISP_WIDTH=512 DISP_HEIGHT=342 DISP_VISIBLE_WIDTH=480 MEMSIZE=208
 ```
 
 This is because `umac` is used to patch the ROM, and when using
