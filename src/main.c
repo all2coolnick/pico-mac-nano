@@ -275,10 +275,59 @@ static FIL discfp[DISC_NUM_DRIVES];
 #define SD_SELECT_WAIT_MS       3000    /* Max wait for a keyboard; 0 disables selection */
 #endif
 
+/* PC control: the number key comes from the viewer (see usb_pc.c).  Wait for
+ * a USB host to enumerate us and the viewer to open the port, then for a
+ * number key.  Without a host (powered from a charger, say) don't wait at all.
+ */
+#ifndef SD_SELECT_PC_CONNECT_MS
+#define SD_SELECT_PC_CONNECT_MS 8000    /* Max wait for the viewer to connect */
+#endif
+#ifndef SD_SELECT_PC_KEY_MS
+#define SD_SELECT_PC_KEY_MS     3000    /* Max wait for a number key once it has */
+#endif
+
+static int      boot_image_number_pc(void)
+{
+#if USB_PC
+        absolute_time_t t0 = get_absolute_time();
+        absolute_time_t end = delayed_by_ms(t0, SD_SELECT_PC_CONNECT_MS);
+        absolute_time_t host_end = delayed_by_ms(t0, 2500);
+
+        while (!tud_cdc_connected() && !time_reached(end)) {
+                if (!tud_mounted() && time_reached(host_end))
+                        break;  /* No USB host */
+                sleep_ms(5);
+        }
+        int connect_ms = (int)(absolute_time_diff_us(t0, get_absolute_time()) / 1000);
+        if (!tud_cdc_connected()) {
+                printf("  No viewer connected after %d ms\n", connect_ms);
+                hid_log("select: no viewer connected within %d ms (host: %s)", connect_ms, tud_mounted() ? "yes" : "no");
+                return 0;
+        }
+
+        absolute_time_t key_end = delayed_by_ms(get_absolute_time(), SD_SELECT_PC_KEY_MS);
+        while (hid_boot_digit < 0 && !time_reached(key_end))
+                sleep_ms(5);
+        int n = hid_boot_digit;
+        printf("  Viewer connected after %d ms, boot key: %d\n", connect_ms, n);
+        hid_log("select: viewer connected at %d ms, boot key %d", connect_ms, n);
+
+        /* Keys pressed while waiting were meant for us, not the Mac: */
+        while (!kbd_queue_empty())
+                kbd_queue_pop();
+
+        return n < 0 ? 0 : n;
+#else
+        return 0;
+#endif
+}
+
 static int      boot_image_number(void)
 {
-        if (SD_SELECT_WAIT_MS <= 0 || PC_MODE)
+        if (SD_SELECT_WAIT_MS <= 0)
                 return 0;
+        if (PC_MODE)
+                return boot_image_number_pc();
 
         absolute_time_t t0 = get_absolute_time();
         absolute_time_t end = delayed_by_ms(t0, SD_SELECT_WAIT_MS);

@@ -1,4 +1,4 @@
-// Pico Mac: shows and controls a pico-mac-nano from a Mac.
+// pico-mac viewer: shows and controls a pico-mac-nano from a Mac.
 //
 // The Pico must be running firmware built with -DUSB_PC=ON, and be plugged into
 // this Mac with a plain USB cable.  The serial protocol is described in
@@ -85,6 +85,7 @@ final class Pico {
 
     var onStatus: ((String?) -> Void)?
     var onSize: ((Int, Int) -> Void)?
+    var onConnect: (() -> Void)?
 
     init(port: String?) {
         portOverride = port
@@ -123,7 +124,7 @@ final class Pico {
     private func run() {
         while true {
             guard let port = portOverride ?? findPicoPort() else {
-                status("Waiting for the Pico…\nPlug it in with a plain USB cable, running USB_PC firmware.")
+                status("Waiting for a pico-mac…\n\nConnect a pico-mac directly to this computer with a standard USB cable.\nTo override the default boot disk image, press and hold a number key until the pico-mac chimes.")
                 Thread.sleep(forTimeInterval: 1)
                 continue
             }
@@ -145,6 +146,7 @@ final class Pico {
             fd = opened
             lock.unlock()
             send([cmdRefresh])
+            DispatchQueue.main.async { self.onConnect?() }
 
             readPackets(opened)
 
@@ -152,7 +154,7 @@ final class Pico {
             fd = -1
             lock.unlock()
             close(opened)
-            status("Lost the Pico. Waiting for it to come back…")
+            status("Lost the pico-mac. Waiting for it to come back…")
             Thread.sleep(forTimeInterval: 1)
         }
     }
@@ -217,6 +219,7 @@ final class ScreenView: NSView {
     let pico: Pico
     var screenSize = NSSize(width: 240, height: 180)
     private let message = NSTextField(wrappingLabelWithString: "")
+    private let messageBox = NSView()      // Half-transparent rounded panel behind the message
     private let hiddenCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
     private var keysDown = Set<UInt16>()
     private var modifiersDown = Set<UInt16>()
@@ -233,15 +236,19 @@ final class ScreenView: NSView {
         layer?.contentsGravity = .resizeAspect
         layer?.magnificationFilter = .nearest
 
+        // The message sits on a half-transparent black rounded box, so it can still be read
+        // when the Mac's last picture is left on the screen behind it.  It is placed by
+        // hand (see layoutMessage), not with Auto Layout constraints, which would also
+        // limit how the window can be resized.
+        messageBox.wantsLayer = true
+        messageBox.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.5).cgColor
+        messageBox.layer?.cornerRadius = 14
+        addSubview(messageBox)
+
+        message.font = NSFont.systemFont(ofSize: 16)
         message.textColor = .white
         message.alignment = .center
-        message.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(message)
-        NSLayoutConstraint.activate([
-            message.centerXAnchor.constraint(equalTo: centerXAnchor),
-            message.centerYAnchor.constraint(equalTo: centerYAnchor),
-            message.widthAnchor.constraint(equalTo: widthAnchor, constant: -40),
-        ])
+        messageBox.addSubview(message)
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
@@ -251,9 +258,35 @@ final class ScreenView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Centres the message box in the view, sized to fit the text (at most 640 points wide).
+    private func layoutMessage() {
+        guard !messageBox.isHidden else { return }
+        let padX: CGFloat = 24, padY: CGFloat = 18
+        let maxText = max(40, min(640, bounds.width - 40) - 2 * padX - 8)
+        // Measure the text the way the label itself will wrap and draw it.
+        message.preferredMaxLayoutWidth = maxText
+        let size = message.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: maxText, height: 100_000))
+            ?? NSSize(width: maxText, height: 60)
+        let textW = min(maxText, ceil(size.width)) + 12      // Slack so the last words are never pushed onto an extra line
+        let textH = ceil(size.height) + 6
+        let w = textW + 2 * padX
+        let h = textH + 2 * padY
+        messageBox.frame = NSRect(x: ((bounds.width - w) / 2).rounded(), y: ((bounds.height - h) / 2).rounded(),
+                                  width: w, height: h)
+        message.frame = NSRect(x: padX, y: padY, width: textW, height: textH)
+        messageBox.needsDisplay = true
+        message.needsDisplay = true
+    }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        layoutMessage()
+    }
+
     func setStatus(_ text: String?) {
         message.stringValue = text ?? ""
-        message.isHidden = (text == nil)
+        messageBox.isHidden = (text == nil)
+        layoutMessage()
         connected = (text == nil)
         window?.invalidateCursorRects(for: self)
     }
@@ -341,6 +374,22 @@ final class ScreenView: NSView {
         }
     }
 
+    /// A key already held down when the Pico connects counts as pressed, as it would
+    /// on a real keyboard.  (This is how a number key held while plugging in picks the
+    /// disc image: keys pressed while no Pico is connected are otherwise lost.)
+    func resendHeldKeys() {
+        for key in keysDown {
+            if let hid = keyToHID[key] {
+                sendKey(hid, true)
+            }
+        }
+        for key in modifiersDown {
+            if let hid = modifierToHID[key] {
+                sendKey(hid, true)
+            }
+        }
+    }
+
     private func releaseKeys() {
         for key in keysDown {
             if let hid = keyToHID[key] {
@@ -381,18 +430,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 540),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "Pico Mac"
+        window.title = "pico-mac viewer"
         window.contentView = screen
         window.contentAspectRatio = NSSize(width: 240, height: 180)
         window.contentMinSize = NSSize(width: 240, height: 180)
         window.delegate = self
-        window.center()
+        // Opens with its top-left corner 80 points in from the top-left of the desktop.
+        window.setContentSize(NSSize(width: 960, height: 720))
+        if let area = NSScreen.main?.visibleFrame {
+            window.setFrameTopLeftPoint(NSPoint(x: area.minX + 80, y: area.maxY - 80))
+        } else {
+            window.center()
+        }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(screen)
 
         pico.onStatus = { [weak self] text in self?.screen.setStatus(text) }
         pico.onSize = { [weak self] w, h in self?.screenSizeChanged(w, h) }
-        screen.setStatus("Looking for the Pico…")
+        pico.onConnect = { [weak self] in self?.screen.resendHeldKeys() }
+        screen.setStatus("Looking for the pico-mac…")
         pico.start()
 
         Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.screen.refresh() }
@@ -413,7 +469,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         screen.screenSize = size
         window.contentAspectRatio = size
         window.contentMinSize = size
-        window.setContentSize(NSSize(width: w * 3, height: h * 3))
+        // Default size is exactly twice the Mac screen, so every pixel is a clean 2x2 block
+        // (no smoothing artefacts); the window's top-left corner stays where it is.
+        let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
+        window.setContentSize(NSSize(width: size.width * 2, height: size.height * 2))
+        window.setFrameTopLeftPoint(topLeft)
     }
 
     private func buildMenu() {
@@ -421,17 +481,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appItem = NSMenuItem()
         main.addItem(appItem)
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Reboot Pico for Flashing…", action: #selector(rebootForFlashing), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Reboot pico-mac for flashing…", action: #selector(rebootForFlashing), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Pico Mac", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         appItem.submenu = appMenu
         NSApp.mainMenu = main
     }
 
     @objc func rebootForFlashing() {
         let alert = NSAlert()
-        alert.messageText = "Reboot the Pico for flashing?"
-        alert.informativeText = "The Mac will stop, and the Pico will appear as a drive. Copy a .uf2 file to it to flash it."
+        alert.messageText = "Reboot the pico-mac for flashing?"
+        alert.informativeText = "The Mac will stop, and the pico-mac will appear as a drive. Copy a .uf2 file to it to flash it."
         alert.addButton(withTitle: "Reboot")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {

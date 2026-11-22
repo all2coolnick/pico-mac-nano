@@ -275,6 +275,8 @@ Use a FAT-formatted micro-SD card, copy your disc image(s) onto it at the root l
 
 Adding 'ro' straight after the digit in any of the above disk image filenames (i.e. 'umac0ro.img' or 'umac3ro_asteroids.img') will make the disk read only. You can add descriptive text after the digit (or after 'ro'), for example 'umac3_asteroids.img' or 'vol2ro_billiards.dsk'. Note that any name with 'ro' directly after the digit is read only, so avoid descriptions that start with 'ro' (e.g. 'umac3rocket.img'); use 'umac3_rocket.img'.
 
+When controlled from a PC (pico-mac viewer), pressing a number key in the viewer window within about 3 seconds of the viewer connecting boots umacN instead, just like holding the key at power-on. Start the viewer before plugging the pico-mac-nano in: the board waits up to 8 seconds for the viewer to connect, then up to 3 seconds for the number key, before booting umac0.
+
 The file name suffix can be .img, .dsk or .image (they are all raw disc images; if a name exists with more than one suffix, .img is used first, then .dsk, then .image). Disc images that start with a DiskCopy 4.2 header are not supported.
 
 ## Putting it together, and building

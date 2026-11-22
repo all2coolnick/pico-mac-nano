@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds "Pico Mac.app" in the folder above this one (tools/PicoMacViewer).
+# Builds "pico-mac viewer.app" in the folder above this one (tools/PicoMacViewer).
 # Needs the Xcode command line tools.
 set -e
 cd "$(dirname "$0")"
 SRC="$PWD"
 cd ..
 
-APP="Pico Mac.app"
+APP="pico-mac viewer.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
@@ -25,13 +25,13 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Pico Mac</string>
-    <key>CFBundleDisplayName</key><string>Pico Mac</string>
+    <key>CFBundleName</key><string>pico-mac viewer</string>
+    <key>CFBundleDisplayName</key><string>pico-mac viewer</string>
     <key>CFBundleIdentifier</key><string>local.pico-mac-nano.viewer</string>
     <key>CFBundleExecutable</key><string>PicoMac</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleVersion</key><string>2</string>
     <key>LSMinimumSystemVersion</key><string>12.0</string>
     <key>NSHighResolutionCapable</key><true/>
 </dict>
