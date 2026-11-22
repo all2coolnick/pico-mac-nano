@@ -1,14 +1,17 @@
-# PicoMacViewer
+# pico-mac viewer
 
-<img  align="right" height="320px" alt="pico-mac-viewer" src="https://github.com/user-attachments/assets/d969dd85-e1a4-4a7b-85e0-8c52cc7e7655" />
+<img  align="right" height="320px" alt="pico-mac-viewer" src="https://github.com/user-attachments/assets/04353c25-b79f-4569-8485-591a79a56ef7" />
 
 18 Nov 2026
 
+
 This is a version of @andshort's native Mac application for remotely viewing and controlling pico-mac-nano, modified to work with the pico-mac-nano standard screen resolution of 480x342, and to add auto-mode selection from a universal firmware version.
 
-As well as using a USB keyboard and mouse, pico-mac-nano can be shown and controlled from a Mac which is excellent news if you want that 1984 Macintosh experience but your eyesight is not up to that tiny 2-inch screen. 
+As well as using a USB keyboard and mouse, pico-mac-nano can be shown and controlled from a Mac. This is excellent news if you want that 1984 Macintosh experience but your eyesight is not up to that tiny 2-inch screen. 
 The Pico only has one USB port which can only be in one of two modes; host or device. When using pico-mac-nano with a mouse or keyboard, it is in host mode. 
 
 This app requires pico-mac-nano to be in device mode so that it can show up to your Mac as a serial USB device. Starting with firmware version 21 (commit 3dff507), if a pico-mac-nano is powered on or reset while connected directly to a Mac with a standard USB data cable (power & data, and not via the OTG Splitter cable), it will boot as normal but the USB port will be in device mode. Launching the pico-mac viewer app on your Mac will open a window with a mirror of the pico-mac-nano's screen and you control it with your Mac's keyboard and mouse/trackpad. While its window is in front, all keys go to the pico-mac-nano, including Command-Q, so quit from the menu bar or by closing the window.
 
 Powering up your pico-mac-nano with a keyboard, mouse or even just the splitter cable, will result in normal operation where the USB port is in host mode.
+
+As of pico-mac-nano firmware 23 (commit 02993da) and pico-mac viewer 1.1, the boot image select feature of pico-mac-nano now works in PC Control mode, i.e. when connected to a computer and using pico-mac viewer to control. The viewer app must be running and the foremost window. Holding down a single number key (e.g. 3) any time before the pico-mac-nano boot beep will cause the pico-mac-nano to try to boot from a correspondingly numbered disk image file (e.g.umac3.img) on the micro-SD card. If that cannot be found, it will revert to the normal boot sequence.
