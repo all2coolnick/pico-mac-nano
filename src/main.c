@@ -68,6 +68,7 @@ static bool     pc_mode = false;
 #include "bsp/rp2040/board.h"
 #include "tusb.h"
 
+#include <strings.h>
 #include "umac.h"
 
 #if USE_SD
@@ -266,7 +267,7 @@ static FIL discfp[DISC_NUM_DRIVES];
 #endif
 
 #if USE_SD
-/* Which disc image to boot: umac<N>*.img, where N is a number key held
+/* Which disc image to boot: umac<N>*.img (or .dsk, .image), where N is a number key held
  * down while powering on (a USB keyboard takes a moment to enumerate, so
  * wait for it, but not for long if there isn't one).  No key means 0.
  */
@@ -321,27 +322,43 @@ static void     write_log_file(const char *title)
         f_close(&f);
 }
 
-/* Find and open <prefix><n>*.img (<prefix><n>ro.img is read-only) as
- * drive 'slot'.  Returns true on success.
+/* Image file name suffixes accepted, in order of preference.  They are
+ * all plain raw disc images; archives use .dsk and .image as well as .img.
+ */
+static const char *const image_suffixes[] = { ".img", ".dsk", ".image" };
+
+/* Find and open <prefix><n>*<suffix> as drive 'slot', where suffix is one
+ * of image_suffixes and the text between is a free description
+ * (umac3_asteroids.img).  If "ro" comes straight after the digit
+ * (umac3ro.img, umac3ro_asteroids.dsk) the disc is read-only.  Returns true
+ * on success.
  */
 static bool     open_image(const char *prefix, int n, int slot, disc_descr_t discs[DISC_NUM_DRIVES], bool quiet)
 {
-        char ro_name[24], pattern[24];
-        snprintf(ro_name, sizeof(ro_name), "%s%dro.img", prefix, n);
-        snprintf(pattern, sizeof(pattern), "%s%d*.img", prefix, n);
-
+        char ro_prefix[24], pattern[24];
         DIR di = {0};
         FILINFO fi = {0};
-        FRESULT fr = f_findfirst(&di, &fi, "/", pattern);
-        if (fr != FR_OK || !fi.fname[0]) {
-                if (!quiet)
-                        printf("  Can't find images %s: %s (%d)\n", pattern, FRESULT_str(fr), fr);
+        FRESULT fr = FR_NO_FILE;
+        bool found = false;
+
+        for (unsigned int i = 0; i < sizeof(image_suffixes) / sizeof(image_suffixes[0]); i++) {
+                snprintf(pattern, sizeof(pattern), "%s%d*%s", prefix, n, image_suffixes[i]);
+                memset(&fi, 0, sizeof(fi));
+                fr = f_findfirst(&di, &fi, "/", pattern);
                 f_closedir(&di);
+                if (fr == FR_OK && fi.fname[0]) {
+                        found = true;
+                        break;
+                }
+        }
+        if (!found) {
+                if (!quiet)
+                        printf("  Can't find images %s%d*.img/.dsk/.image: %s (%d)\n", prefix, n, FRESULT_str(fr), fr);
                 return false;
         }
-        f_closedir(&di);
 
-        int read_only = !strcmp(fi.fname, ro_name);
+        snprintf(ro_prefix, sizeof(ro_prefix), "%s%dro", prefix, n);
+        int read_only = !strncasecmp(fi.fname, ro_prefix, strlen(ro_prefix));
         printf("  Opening %s as drive %d (R%c)\n", fi.fname, slot + 1, read_only ? 'O' : 'W');
 
         /* Open image, set up disc info: */
@@ -363,7 +380,7 @@ static bool     open_image(const char *prefix, int n, int slot, disc_descr_t dis
         return true;
 }
 
-/* Extra volumes: <SD_EXTRA_PREFIX>1*.img, 2*.img, ... are mounted as
+/* Extra volumes: <SD_EXTRA_PREFIX>1*.img (or .dsk, .image), 2*..., are mounted as
  * further drives (appearing on the desktop after the Mac has booted).
  */
 #ifndef SD_EXTRA_PREFIX

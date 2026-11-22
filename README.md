@@ -273,7 +273,9 @@ Use a FAT-formatted micro-SD card, copy your disc image(s) onto it at the root l
    * umac1.img ... umac9.img : Read/write boot disk selectable by holding number key down at startup
    * vol1.img ... vol3.img : Read/write disks that automatically mount on the desktop after boot (3 max).
 
-Adding 'ro' after the digit in any of the above disk image filenames (i.e. 'umac0ro.img') will make the disk read only.
+Adding 'ro' straight after the digit in any of the above disk image filenames (i.e. 'umac0ro.img' or 'umac3ro_asteroids.img') will make the disk read only. You can add descriptive text after the digit (or after 'ro'), for example 'umac3_asteroids.img' or 'vol2ro_billiards.dsk'. Note that any name with 'ro' directly after the digit is read only, so avoid descriptions that start with 'ro' (e.g. 'umac3rocket.img'); use 'umac3_rocket.img'.
+
+The file name suffix can be .img, .dsk or .image (they are all raw disc images; if a name exists with more than one suffix, .img is used first, then .dsk, then .image). Disc images that start with a DiskCopy 4.2 header are not supported.
 
 ## Putting it together, and building
 

@@ -20,7 +20,10 @@
     3000 ms, 0 disables) for a USB keyboard to appear.
   * Extra volumes: `vol1*.img`, `vol2*.img`, `vol3*.img` are mounted as drives
     2-4 and appear on the desktop shortly after boot (`SD_EXTRA_PREFIX` changes
-    the "vol" prefix). `...ro.img` (e.g. `vol1ro.img`) means read-only.
+    the "vol" prefix). A name with `ro` straight after the digit (e.g. `vol1ro.img`,
+    `vol1ro_billiards.dsk`) means read-only; other text after the digit is a free description.
+  * Image files may end in `.img`, `.dsk` or `.image` (tried in that order; `image_suffixes[]`
+    in `src/main.c`), for the boot image and the extra volumes alike.
   * umac (`external/umac`): `DISC_NUM_DRIVES` is now 4; the `.Sony` driver stub
     (`macsrc/sonydrv.S`, rebuilt into `include/sonydrv.h` with
     `make sonydrv.bin`, needs m68k binutils) registers every disc and mounts the
