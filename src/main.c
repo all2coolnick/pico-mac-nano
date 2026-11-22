@@ -68,6 +68,7 @@ static bool     pc_mode = false;
 #include "bsp/rp2040/board.h"
 #include "tusb.h"
 
+#include <strings.h>
 #include "umac.h"
 
 #if USE_SD
@@ -266,7 +267,7 @@ static FIL discfp[DISC_NUM_DRIVES];
 #endif
 
 #if USE_SD
-/* Which disc image to boot: umac<N>*.img, where N is a number key held
+/* Which disc image to boot: umac<N>*.img (or .dsk, .image), where N is a number key held
  * down while powering on (a USB keyboard takes a moment to enumerate, so
  * wait for it, but not for long if there isn't one).  No key means 0.
  */
@@ -274,10 +275,59 @@ static FIL discfp[DISC_NUM_DRIVES];
 #define SD_SELECT_WAIT_MS       3000    /* Max wait for a keyboard; 0 disables selection */
 #endif
 
+/* PC control: the number key comes from the viewer (see usb_pc.c).  Wait for
+ * a USB host to enumerate us and the viewer to open the port, then for a
+ * number key.  Without a host (powered from a charger, say) don't wait at all.
+ */
+#ifndef SD_SELECT_PC_CONNECT_MS
+#define SD_SELECT_PC_CONNECT_MS 8000    /* Max wait for the viewer to connect */
+#endif
+#ifndef SD_SELECT_PC_KEY_MS
+#define SD_SELECT_PC_KEY_MS     3000    /* Max wait for a number key once it has */
+#endif
+
+static int      boot_image_number_pc(void)
+{
+#if USB_PC
+        absolute_time_t t0 = get_absolute_time();
+        absolute_time_t end = delayed_by_ms(t0, SD_SELECT_PC_CONNECT_MS);
+        absolute_time_t host_end = delayed_by_ms(t0, 2500);
+
+        while (!tud_cdc_connected() && !time_reached(end)) {
+                if (!tud_mounted() && time_reached(host_end))
+                        break;  /* No USB host */
+                sleep_ms(5);
+        }
+        int connect_ms = (int)(absolute_time_diff_us(t0, get_absolute_time()) / 1000);
+        if (!tud_cdc_connected()) {
+                printf("  No viewer connected after %d ms\n", connect_ms);
+                hid_log("select: no viewer connected within %d ms (host: %s)", connect_ms, tud_mounted() ? "yes" : "no");
+                return 0;
+        }
+
+        absolute_time_t key_end = delayed_by_ms(get_absolute_time(), SD_SELECT_PC_KEY_MS);
+        while (hid_boot_digit < 0 && !time_reached(key_end))
+                sleep_ms(5);
+        int n = hid_boot_digit;
+        printf("  Viewer connected after %d ms, boot key: %d\n", connect_ms, n);
+        hid_log("select: viewer connected at %d ms, boot key %d", connect_ms, n);
+
+        /* Keys pressed while waiting were meant for us, not the Mac: */
+        while (!kbd_queue_empty())
+                kbd_queue_pop();
+
+        return n < 0 ? 0 : n;
+#else
+        return 0;
+#endif
+}
+
 static int      boot_image_number(void)
 {
-        if (SD_SELECT_WAIT_MS <= 0 || PC_MODE)
+        if (SD_SELECT_WAIT_MS <= 0)
                 return 0;
+        if (PC_MODE)
+                return boot_image_number_pc();
 
         absolute_time_t t0 = get_absolute_time();
         absolute_time_t end = delayed_by_ms(t0, SD_SELECT_WAIT_MS);
@@ -321,27 +371,43 @@ static void     write_log_file(const char *title)
         f_close(&f);
 }
 
-/* Find and open <prefix><n>*.img (<prefix><n>ro.img is read-only) as
- * drive 'slot'.  Returns true on success.
+/* Image file name suffixes accepted, in order of preference.  They are
+ * all plain raw disc images; archives use .dsk and .image as well as .img.
+ */
+static const char *const image_suffixes[] = { ".img", ".dsk", ".image" };
+
+/* Find and open <prefix><n>*<suffix> as drive 'slot', where suffix is one
+ * of image_suffixes and the text between is a free description
+ * (umac3_asteroids.img).  If "ro" comes straight after the digit
+ * (umac3ro.img, umac3ro_asteroids.dsk) the disc is read-only.  Returns true
+ * on success.
  */
 static bool     open_image(const char *prefix, int n, int slot, disc_descr_t discs[DISC_NUM_DRIVES], bool quiet)
 {
-        char ro_name[24], pattern[24];
-        snprintf(ro_name, sizeof(ro_name), "%s%dro.img", prefix, n);
-        snprintf(pattern, sizeof(pattern), "%s%d*.img", prefix, n);
-
+        char ro_prefix[24], pattern[24];
         DIR di = {0};
         FILINFO fi = {0};
-        FRESULT fr = f_findfirst(&di, &fi, "/", pattern);
-        if (fr != FR_OK || !fi.fname[0]) {
-                if (!quiet)
-                        printf("  Can't find images %s: %s (%d)\n", pattern, FRESULT_str(fr), fr);
+        FRESULT fr = FR_NO_FILE;
+        bool found = false;
+
+        for (unsigned int i = 0; i < sizeof(image_suffixes) / sizeof(image_suffixes[0]); i++) {
+                snprintf(pattern, sizeof(pattern), "%s%d*%s", prefix, n, image_suffixes[i]);
+                memset(&fi, 0, sizeof(fi));
+                fr = f_findfirst(&di, &fi, "/", pattern);
                 f_closedir(&di);
+                if (fr == FR_OK && fi.fname[0]) {
+                        found = true;
+                        break;
+                }
+        }
+        if (!found) {
+                if (!quiet)
+                        printf("  Can't find images %s%d*.img/.dsk/.image: %s (%d)\n", prefix, n, FRESULT_str(fr), fr);
                 return false;
         }
-        f_closedir(&di);
 
-        int read_only = !strcmp(fi.fname, ro_name);
+        snprintf(ro_prefix, sizeof(ro_prefix), "%s%dro", prefix, n);
+        int read_only = !strncasecmp(fi.fname, ro_prefix, strlen(ro_prefix));
         printf("  Opening %s as drive %d (R%c)\n", fi.fname, slot + 1, read_only ? 'O' : 'W');
 
         /* Open image, set up disc info: */
@@ -363,7 +429,7 @@ static bool     open_image(const char *prefix, int n, int slot, disc_descr_t dis
         return true;
 }
 
-/* Extra volumes: <SD_EXTRA_PREFIX>1*.img, 2*.img, ... are mounted as
+/* Extra volumes: <SD_EXTRA_PREFIX>1*.img (or .dsk, .image), 2*..., are mounted as
  * further drives (appearing on the desktop after the Mac has booted).
  */
 #ifndef SD_EXTRA_PREFIX

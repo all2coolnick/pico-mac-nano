@@ -18,9 +18,16 @@
     the in-flash disc). Enabled by default; build with `-DSD_BOOT_SELECT=OFF` to remove it
     (no keyboard wait at boot). The firmware waits up to `SD_SELECT_WAIT_MS` (default
     3000 ms, 0 disables) for a USB keyboard to appear.
+    In PC-control mode (USB_AUTO restarted as a device) the number key comes from the
+    viewer instead: the firmware waits up to `SD_SELECT_PC_CONNECT_MS` (8000) for the
+    viewer to open the serial port (not at all if no USB host is present), then up to
+    `SD_SELECT_PC_KEY_MS` (3000) for a number key (`usb_pc.c` sets `hid_boot_digit`).
   * Extra volumes: `vol1*.img`, `vol2*.img`, `vol3*.img` are mounted as drives
     2-4 and appear on the desktop shortly after boot (`SD_EXTRA_PREFIX` changes
-    the "vol" prefix). `...ro.img` (e.g. `vol1ro.img`) means read-only.
+    the "vol" prefix). A name with `ro` straight after the digit (e.g. `vol1ro.img`,
+    `vol1ro_billiards.dsk`) means read-only; other text after the digit is a free description.
+  * Image files may end in `.img`, `.dsk` or `.image` (tried in that order; `image_suffixes[]`
+    in `src/main.c`), for the boot image and the extra volumes alike.
   * umac (`external/umac`): `DISC_NUM_DRIVES` is now 4; the `.Sony` driver stub
     (`macsrc/sonydrv.S`, rebuilt into `include/sonydrv.h` with
     `make sonydrv.bin`, needs m68k binutils) registers every disc and mounts the
@@ -76,7 +83,7 @@ The ROM and disc images are not included.
 * **PC control** (`-DUSB_PC=ON`): the Pico becomes a USB serial device instead of a USB host, so no
   keyboard or mouse can be plugged in; boot-key select and `picolog.txt` are not available in this mode.
   The screen is sent to the PC and the PC's mouse and keyboard are sent back. The protocol is in
-  `include/usb_pc.h`; `tools/PicoMacViewer` is a macOS app that uses it (source in `tools/PicoMacViewer/source`; run its `build.sh` on a Mac to build "Pico Mac.app" into `tools/PicoMacViewer`). The app is only ad-hoc signed, so macOS warns about a downloaded copy: right-click it, choose Open, and confirm once.
+  `include/usb_pc.h`; `tools/PicoMacViewer` is a macOS app that uses it (source in `tools/PicoMacViewer/source`; run its `build.sh` on a Mac to build "pico-mac viewer.app" into `tools/PicoMacViewer`). The app is only ad-hoc signed, so macOS warns about a downloaded copy: right-click it, choose Open, and confirm once.
   Unlike the original, the changed-line detection keeps a hash per line rather than a copy of the screen,
   so the RAM use is about the same as the normal build and it fits the 208K option.
 * The 240x180 2x2 display mode from the same pull request is not included.

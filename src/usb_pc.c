@@ -158,6 +158,20 @@ static void     request_refresh(void)
         send_all_next = true;
 }
 
+/* HID key code -> 0-9 for the number row and keypad digits, else -1 */
+static int      digit_of_key(unsigned int c)
+{
+        if (c >= 0x1e && c <= 0x26)     /* 1..9 */
+                return c - 0x1e + 1;
+        if (c == 0x27)                  /* 0 */
+                return 0;
+        if (c >= 0x59 && c <= 0x61)     /* Keypad 1..9 */
+                return c - 0x59 + 1;
+        if (c == 0x62)                  /* Keypad 0 */
+                return 0;
+        return -1;
+}
+
 static void     run_cmd(void)
 {
         switch (cmd[0]) {
@@ -168,6 +182,12 @@ static void     run_cmd(void)
                 cursor_button = !!cmd[1];
                 break;
         case CMD_KEY:
+                if (cmd[2]) {
+                        /* A number key (top row or keypad) is also a boot image choice: */
+                        int d = digit_of_key(cmd[1]);
+                        if (d >= 0)
+                                hid_boot_digit = d;
+                }
                 kbd_queue_push(cmd[1], !!cmd[2]);
                 break;
         case CMD_REFRESH:
